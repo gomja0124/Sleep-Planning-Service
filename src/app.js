@@ -10,6 +10,19 @@ import {
 
 const STORAGE_KEY = "bamgai-demo-v1";
 
+const CHARACTER_OPTIONS = {
+  owl: {
+    name: "루미",
+    species: "올빼미",
+    description: "조용히 계획을 세우고 차근차근 리듬을 맞춰요.",
+  },
+  bat: {
+    name: "바미",
+    species: "박쥐",
+    description: "밤의 변화를 빠르게 알아채고 유연하게 계획을 바꿔요.",
+  },
+};
+
 const icons = {
   moon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 15.1A8.5 8.5 0 0 1 8.9 3.6 8.5 8.5 0 1 0 20.4 15.1Z"/></svg>`,
   home: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z"/></svg>`,
@@ -45,6 +58,7 @@ function newId() {
 function seedState() {
   const tomorrow = addDays(new Date(), 1);
   return {
+    selectedCharacter: null,
     profile: {
       name: "도경",
       targetWake: "07:30",
@@ -91,7 +105,10 @@ function seedState() {
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.profile && Array.isArray(saved.schedules) && Array.isArray(saved.feedback)) return saved;
+    if (saved?.profile && Array.isArray(saved.schedules) && Array.isArray(saved.feedback)) {
+      const selectedCharacter = CHARACTER_OPTIONS[saved.selectedCharacter] ? saved.selectedCharacter : null;
+      return { ...saved, selectedCharacter };
+    }
   } catch (error) {
     console.warn("저장된 데모 데이터를 불러오지 못했습니다.", error);
   }
@@ -101,6 +118,7 @@ function loadState() {
 let state = loadState();
 const ui = {
   view: "today",
+  characterDraft: state.selectedCharacter,
   showReason: true,
   scheduleType: "fixed",
   editScheduleId: null,
@@ -131,6 +149,11 @@ function sleepGoalLabel() {
   return formatDuration(state.profile.targetSleepMinutes);
 }
 
+function characterArtwork(character, className = "") {
+  const option = CHARACTER_OPTIONS[character] ?? CHARACTER_OPTIONS.owl;
+  return `<span class="character-sprite character-${character} ${className}" role="img" aria-label="${option.species} 캐릭터 ${option.name}"></span>`;
+}
+
 function navItem(view, label, iconName) {
   const active = ui.view === view;
   return `<button class="nav-item ${active ? "is-active" : ""}" data-view="${view}" aria-current="${active ? "page" : "false"}">
@@ -159,7 +182,7 @@ function shell(content) {
           <p>수면 결과가 쌓일수록 추천이 도경님에게 더 가까워져요.</p>
         </div>
         <div class="sidebar-profile">
-          <span class="avatar">도</span>
+          ${characterArtwork(state.selectedCharacter, "avatar")}
           <span><b>${escapeHtml(state.profile.name)}님</b><small>${sleepGoalLabel()} 목표</small></span>
           <button class="icon-button" data-view="rhythm" aria-label="내 리듬 설정">${icon("arrow")}</button>
         </div>
@@ -181,18 +204,41 @@ function shell(content) {
     </div>`;
 }
 
-function owlPlaceholder() {
-  return `<div class="owl-wrap" aria-label="올빼미 캐릭터 자리표시자">
+function heroCharacter() {
+  const selected = state.selectedCharacter ?? "owl";
+  const option = CHARACTER_OPTIONS[selected];
+  return `<div class="owl-wrap" aria-label="선택한 수면 메이트 ${option.species} ${option.name}">
     <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
-    <svg class="owl" viewBox="0 0 180 180" role="img" aria-hidden="true">
-      <path class="owl-body" d="M45 67 29 46l31 9c9-7 19-10 30-10s21 3 30 10l31-9-16 21c8 12 12 27 12 43 0 36-25 56-57 56s-57-20-57-56c0-16 4-31 12-43Z"/>
-      <circle class="owl-eye-ring" cx="68" cy="92" r="24"/><circle class="owl-eye-ring" cx="112" cy="92" r="24"/>
-      <circle class="owl-eye" cx="70" cy="94" r="8"/><circle class="owl-eye" cx="110" cy="94" r="8"/>
-      <path class="owl-beak" d="m90 102-9 12h18l-9-12Z"/>
-      <path class="owl-wing" d="M49 118c9 11 17 17 26 19M131 118c-9 11-17 17-26 19"/>
-    </svg>
-    <span class="asset-note">순형 캐릭터 에셋 자리</span>
+    ${characterArtwork(selected, "hero-character-art")}
+    <span class="asset-note">나의 수면 메이트 · ${option.name}</span>
   </div>`;
+}
+
+function renderCharacterOnboarding() {
+  const selected = ui.characterDraft;
+  return `<main class="character-onboarding">
+    <div class="onboarding-stars" aria-hidden="true"></div>
+    <header class="onboarding-header">
+      <span class="brand-mark">${icon("moon")}</span>
+      <span><b>밤가이</b><small>나만의 수면 리듬 메이트</small></span>
+    </header>
+    <section class="onboarding-content">
+      <span class="onboarding-step">첫 만남 · 1 / 2</span>
+      <h1>오늘 밤을 함께할<br>친구를 골라주세요.</h1>
+      <p>선택한 친구가 매일의 취침 계획과 아침 피드백을 함께할 거예요.<br>기능에는 차이가 없으니 마음이 가는 친구를 선택하세요.</p>
+      <div class="character-grid" role="radiogroup" aria-label="수면 메이트 선택">
+        ${Object.entries(CHARACTER_OPTIONS).map(([key, option]) => `<button class="character-choice ${selected === key ? "is-selected" : ""}" data-action="select-character" data-character="${key}" role="radio" aria-checked="${selected === key}">
+          <span class="choice-check">${icon("check")}</span>
+          ${characterArtwork(key, "choice-character-art")}
+          <span class="character-copy"><small>${option.species}</small><b>${option.name}</b><em>${option.description}</em></span>
+        </button>`).join("")}
+      </div>
+      <button class="onboarding-continue" data-action="confirm-character" ${selected ? "" : "disabled"}>
+        ${selected ? `${CHARACTER_OPTIONS[selected].name}와 시작하기` : "친구를 선택해 주세요"} ${icon("arrow")}
+      </button>
+      <small class="onboarding-footnote">나중에 내 리듬 설정에서 다시 바꿀 수 있어요.</small>
+    </section>
+  </main>`;
 }
 
 function renderReasons(plan) {
@@ -226,7 +272,7 @@ function renderToday() {
           <button class="text-button light-text" data-action="toggle-reason">${ui.showReason ? "근거 접기" : "계산 근거 보기"} ${icon("arrow")}</button>
         </div>
       </div>
-      ${owlPlaceholder()}
+      ${heroCharacter()}
       ${adjustment.minutes ? `<span class="adjustment-badge">피드백 반영 · ${adjustment.minutes}분 추가</span>` : ""}
     </section>
 
@@ -398,7 +444,7 @@ function renderRhythm() {
     </section>
     <div class="rhythm-layout">
       <section class="card form-card profile-card">
-        <div class="card-heading"><div><span class="card-kicker">BASELINE</span><h3>기본 수면 목표</h3></div><span class="soft-chip">언제든 수정 가능</span></div>
+        <div class="card-heading"><div><span class="card-kicker">BASELINE</span><h3>기본 수면 목표</h3></div><button class="ghost-button compact" data-action="change-character">캐릭터 변경</button></div>
         <form id="profile-form">
           <label class="field"><span>이름</span><input name="name" value="${escapeHtml(state.profile.name)}" required maxlength="10"></label>
           <div class="form-grid two">
@@ -434,6 +480,10 @@ function renderRhythm() {
 }
 
 function render() {
+  if (!state.selectedCharacter) {
+    app.innerHTML = renderCharacterOnboarding();
+    return;
+  }
   const views = {
     today: renderToday,
     schedule: renderSchedule,
@@ -467,6 +517,25 @@ document.addEventListener("click", (event) => {
   const actionButton = event.target.closest("[data-action]");
   if (!actionButton) return;
   const { action } = actionButton.dataset;
+
+  if (action === "select-character") {
+    ui.characterDraft = actionButton.dataset.character;
+    render();
+  }
+
+  if (action === "confirm-character" && CHARACTER_OPTIONS[ui.characterDraft]) {
+    state.selectedCharacter = ui.characterDraft;
+    persist();
+    ui.view = "today";
+    toast(`${CHARACTER_OPTIONS[state.selectedCharacter].name}가 도경님의 수면 메이트가 되었어요.`);
+  }
+
+  if (action === "change-character") {
+    ui.characterDraft = state.selectedCharacter;
+    state.selectedCharacter = null;
+    persist();
+    render();
+  }
 
   if (action === "toggle-reason") {
     ui.showReason = !ui.showReason;
@@ -519,6 +588,7 @@ document.addEventListener("click", (event) => {
 
   if (action === "reset-demo" && window.confirm("입력한 데모 데이터를 초기 상태로 되돌릴까요?")) {
     state = seedState();
+    ui.characterDraft = null;
     ui.view = "today";
     ui.editScheduleId = null;
     persist();
