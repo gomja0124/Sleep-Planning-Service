@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @keyframes somniFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  @keyframes somniPulse { 0%,100% { transform: scale(1); opacity: .55; } 50% { transform: scale(1.18); opacity: .9; } }
+  @keyframes somniBreathe { 0%,100% { transform: scale(0.82); } 50% { transform: scale(1.12); } }
+  @keyframes somniTwinkle { 0%,100% { opacity: .25; } 50% { opacity: .9; } }
+  @keyframes somniSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  body { margin: 0; background: #05060c; }
+  a { color: #B7A9F0; }
+  a:hover { color: #CFC4F5; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</helmet>
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" width="402" height="874" hint-size="402,874" style="margin:24px auto;">
+
+<div style="height:100%; width:100%; display:flex; flex-direction:column; font-family:'Manrope',-apple-system,system-ui,sans-serif; background:{{ themeBg0 }}; color:#F3F1EC; position:relative; overflow:hidden; {{ themeVars }}">
+
+  <!-- ================= ONBOARDING ================= -->
+  <sc-if value="{{ isOnboarding }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1; overflow-y:auto; padding:64px 24px 32px; display:flex; flex-direction:column; box-sizing:border-box;">
+
+      <!-- progress dots -->
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:28px;">
+        <sc-for list="{{ obDots }}" as="d" hint-placeholder-count="3">
+          <div style="width:{{ d.w }}px; height:6px; border-radius:3px; background:{{ d.bg }};"></div>
+        </sc-for>
+      </div>
+
+      <!-- STEP 0: welcome -->
+      <sc-if value="{{ obStep0 }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; text-align:center;">
+          <div style="position:relative; width:220px; height:170px; margin:8px auto 20px;">
+            <div style="position:absolute; top:6px; left:8px; width:6px; height:6px; border-radius:50%; background:#F1E7D0; animation:somniTwinkle 2.4s ease-in-out infinite;"></div>
+            <div style="position:absolute; top:30px; right:14px; width:5px; height:5px; border-radius:50%; background:#93C2F2; animation:somniTwinkle 3.1s ease-in-out infinite .5s;"></div>
+            <div style="position:absolute; bottom:36px; left:2px; width:4px; height:4px; border-radius:50%; background:#9FE0C4; animation:somniTwinkle 2.8s ease-in-out infinite 1s;"></div>
+            <div style="position:absolute; bottom:0; left:50%; transform:translateX(-50%); display:flex; gap:14px; align-items:flex-end;">
+              <div style="position:relative; width:62px; height:62px;">
+                <div style="position:absolute; inset:-12px; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.4), transparent 70%);"></div>
+                <img src="assets/cat-sleepy.png" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%; box-shadow:0 6px 18px rgba(0,0,0,0.35);"/>
+              </div>
+              <div style="position:relative; width:78px; height:78px; margin-bottom:8px;">
+                <div style="position:absolute; inset:-16px; border-radius:50%; background:radial-gradient(circle, rgba(241,231,208,0.4), transparent 70%);"></div>
+                <img src="assets/owl-sleepy.png" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%; box-shadow:0 6px 18px rgba(0,0,0,0.35);"/>
+              </div>
+              <div style="position:relative; width:62px; height:62px;">
+                <div style="position:absolute; inset:-12px; border-radius:50%; background:radial-gradient(circle, rgba(147,194,242,0.4), transparent 70%);"></div>
+                <img src="assets/bat-sleepy.png" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%; box-shadow:0 6px 18px rgba(0,0,0,0.35);"/>
+              </div>
+            </div>
+          </div>
+          <h1 style="font-size:32px; font-weight:800; margin:8px 0 10px; letter-spacing:-0.5px;">Somni</h1>
+          <p style="font-size:15px; line-height:1.6; color:#9A9BB0; max-width:270px; margin:0;">A calm companion for winding down, sleeping well, and waking gently — no pressure, no streaks to lose.</p>
+        </div>
+        <button onclick="{{ goObStep1 }}" style="margin-top:24px; width:100%; padding:17px; border:none; border-radius:18px; background:linear-gradient(135deg,#B7A9F0,#93C2F2); color:#141833; font-size:16px; font-weight:700; font-family:inherit;">Get started</button>
+      </sc-if>
+
+      <!-- STEP 1: choose companion -->
+      <sc-if value="{{ obStep1 }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;">
+          <h2 style="font-size:24px; font-weight:800; margin:4px 0 6px;">Choose your companion</h2>
+          <p style="font-size:14px; color:#9A9BB0; margin:0 0 24px;">They'll keep you gentle company every night. You can switch anytime in Settings.</p>
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <sc-for list="{{ charOptions }}" as="c" hint-placeholder-count="3">
+              <div onclick="{{ c.select }}" style="display:flex; align-items:center; gap:14px; padding:14px; border-radius:20px; background:{{ c.bg }}; border:2px solid {{ c.border }}; cursor:pointer;">
+                <div style="position:relative; width:64px; height:64px; flex-shrink:0;">
+                  <div style="position:absolute; inset:-10px; border-radius:50%; background:radial-gradient({{ c.glow }}, transparent 70%); opacity:{{ c.glowOpacity }};"></div>
+                  <img src="{{ c.img }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%;"/>
+                </div>
+                <div style="flex:1;">
+                  <div style="font-size:16px; font-weight:700;">{{ c.label }}</div>
+                  <div style="font-size:13px; color:#9A9BB0;">{{ c.tagline }}</div>
+                </div>
+                <sc-if value="{{ c.selected }}" hint-placeholder-val="{{ false }}">
+                  <div style="width:24px; height:24px; border-radius:50%; background:#9FE0C4; display:flex; align-items:center; justify-content:center;">
+                    <svg width="13" height="10" viewBox="0 0 13 10"><path d="M1 5l4 4 7-8" stroke="#141833" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <button onclick="{{ goObStep2 }}" style="margin-top:20px; width:100%; padding:17px; border:none; border-radius:18px; background:linear-gradient(135deg,#B7A9F0,#93C2F2); color:#141833; font-size:16px; font-weight:700; font-family:inherit;">Continue</button>
+      </sc-if>
+
+      <!-- STEP 2: goal + times -->
+      <sc-if value="{{ obStep2 }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;">
+          <h2 style="font-size:24px; font-weight:800; margin:4px 0 6px;">Set your rhythm</h2>
+          <p style="font-size:14px; color:#9A9BB0; margin:0 0 22px;">You can always change this later.</p>
+
+          <div style="background:{{ themeBg1 }}; border-radius:20px; padding:18px 20px; margin-bottom:14px;">
+            <div style="font-size:13px; color:#9A9BB0; margin-bottom:10px;">Sleep goal</div>
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <button onclick="{{ decGoal }}" style="width:40px; height:40px; border-radius:12px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:20px; font-family:inherit;">−</button>
+              <div style="font-size:22px; font-weight:800;">{{ goalHours }}h</div>
+              <button onclick="{{ incGoal }}" style="width:40px; height:40px; border-radius:12px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:20px; font-family:inherit;">+</button>
+            </div>
+          </div>
+
+          <div style="background:{{ themeBg1 }}; border-radius:20px; padding:18px 20px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <div style="font-size:13px; color:#9A9BB0; margin-bottom:6px;">Bedtime</div>
+              <div style="font-size:20px; font-weight:800;">{{ bedtimeDisp }}</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button onclick="{{ bedtimeMinus }}" style="width:36px; height:36px; border-radius:11px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:17px; font-family:inherit;">−</button>
+              <button onclick="{{ bedtimePlus }}" style="width:36px; height:36px; border-radius:11px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:17px; font-family:inherit;">+</button>
+            </div>
+          </div>
+
+          <div style="background:{{ themeBg1 }}; border-radius:20px; padding:18px 20px; display:flex; align-items:center; justify-content:space-between;">
+            <div>
+              <div style="font-size:13px; color:#9A9BB0; margin-bottom:6px;">Wake-up</div>
+              <div style="font-size:20px; font-weight:800;">{{ waketimeDisp }}</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button onclick="{{ waketimeMinus }}" style="width:36px; height:36px; border-radius:11px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:17px; font-family:inherit;">−</button>
+              <button onclick="{{ waketimePlus }}" style="width:36px; height:36px; border-radius:11px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:17px; font-family:inherit;">+</button>
+            </div>
+          </div>
+        </div>
+        <button onclick="{{ finishOnboarding }}" style="margin-top:20px; width:100%; padding:17px; border:none; border-radius:18px; background:linear-gradient(135deg,#B7A9F0,#93C2F2); color:#141833; font-size:16px; font-weight:700; font-family:inherit;">Start with Somni</button>
+      </sc-if>
+
+    </div>
+  </sc-if>
+
+  <!-- ================= HOME ================= -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; overflow-y:auto; padding:60px 22px 130px; box-sizing:border-box;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+        <div>
+          <div style="font-size:13px; color:#9A9BB0;">{{ greeting }}</div>
+          <div style="font-size:15px; font-weight:700;">{{ nowTime }}</div>
+        </div>
+        <div style="width:38px; height:38px; border-radius:50%; background:{{ themeBg1 }}; display:flex; align-items:center; justify-content:center;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#B7A9F0" stroke-width="1.8"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+        </div>
+      </div>
+
+      <!-- companion + bedtime hero -->
+      <div style="background:linear-gradient(160deg, {{ themeBg1 }}, {{ themeBg2 }}); border-radius:26px; padding:22px; margin-bottom:14px; position:relative; overflow:hidden;">
+        <div style="position:absolute; top:-30px; right:-30px; width:140px; height:140px; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.28), transparent 70%);"></div>
+        <div style="display:flex; align-items:center; gap:16px; position:relative;">
+          <div style="position:relative; width:86px; height:86px; flex-shrink:0; animation:somniFloat 4.5s ease-in-out infinite;">
+            <div style="position:absolute; inset:-16px; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.4), transparent 70%);"></div>
+            <img src="{{ charImg }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%; box-shadow:0 8px 22px rgba(0,0,0,0.35);"/>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:13px; color:#9A9BB0; margin-bottom:4px;">Tonight's bedtime</div>
+            <div style="font-size:24px; font-weight:800;">{{ bedtimeDisp }}</div>
+            <div style="font-size:13px; color:#9FE0C4; margin-top:2px;">in {{ timeRemainingLabel }}</div>
+          </div>
+        </div>
+      </div>
+
+      <sc-if value="{{ showNudge }}" hint-placeholder-val="{{ false }}">
+        <div style="background:{{ themeBg1 }}; border-radius:20px; padding:14px 16px; margin-bottom:14px; display:flex; align-items:center; gap:12px;">
+          <div style="position:relative; width:44px; height:44px; flex-shrink:0;">
+            <div style="position:absolute; inset:-8px; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.3), transparent 70%);"></div>
+            <img src="{{ charImgPouty }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%;"/>
+          </div>
+          <div style="flex:1; font-size:13px; line-height:1.5; color:#D8D6E8;">No rush — whenever you're ready, your wind-down routine will be here.</div>
+          <button onclick="{{ dismissNudge }}" style="background:none; border:none; color:#9A9BB0; font-size:16px; padding:4px; font-family:inherit;">✕</button>
+        </div>
+      </sc-if>
+
+      <div style="background:{{ themeBg1 }}; border-radius:20px; padding:18px 20px; margin-bottom:20px;">
+        <div style="font-size:13px; color:#9A9BB0; margin-bottom:8px;">Last night</div>
+        <div style="display:flex; align-items:baseline; gap:8px;">
+          <div style="font-size:22px; font-weight:800; white-space:nowrap; flex-shrink:0;">{{ lastNightHours }}</div>
+          <div style="font-size:13px; color:#93C2F2;">{{ lastNightTag }}</div>
+        </div>
+      </div>
+
+      <button onclick="{{ goToRoutine }}" style="width:100%; min-height:56px; box-sizing:border-box; padding:0 20px; border:none; border-radius:20px; background:linear-gradient(135deg,#B7A9F0,#93C2F2); color:#141833; font-size:16.5px; font-weight:700; font-family:inherit; box-shadow:0 8px 24px rgba(147,194,242,0.25);">Begin bedtime routine</button>
+    </div>
+  </sc-if>
+
+  <!-- ================= ROUTINE ================= -->
+  <sc-if value="{{ isRoutine }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; overflow-y:auto; padding:56px 22px 130px; box-sizing:border-box;">
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:18px;">
+        <button onclick="{{ backToHome }}" style="width:36px; height:36px; border-radius:50%; border:none; background:{{ themeBg1 }}; display:flex; align-items:center; justify-content:center;">
+          <svg width="9" height="15" viewBox="0 0 9 15"><path d="M8 1L1.5 7.5 8 14" stroke="#F3F1EC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div style="font-size:18px; font-weight:800;">Wind-down routine</div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:12px; background:{{ themeBg1 }}; border-radius:18px; padding:14px 16px; margin-bottom:20px;">
+        <div style="position:relative; width:46px; height:46px; flex-shrink:0;">
+          <div style="position:absolute; inset:-8px; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.35), transparent 70%);"></div>
+          <img src="{{ charImg }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%;"/>
+        </div>
+        <div style="flex:1;">
+          <div style="height:6px; border-radius:3px; background:{{ themeBg2 }}; overflow:hidden;">
+            <div style="height:100%; width:{{ routinePct }}%; background:linear-gradient(90deg,#9FE0C4,#93C2F2); border-radius:3px;"></div>
+          </div>
+        </div>
+        <div style="font-size:13px; color:#9A9BB0; white-space:nowrap;">{{ routineDoneCount }}/{{ routineTotal }}</div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <sc-for list="{{ routineTasks }}" as="t" hint-placeholder-count="5">
+          <div onclick="{{ t.toggle }}" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:18px; background:{{ t.bg }}; cursor:pointer;">
+            <div style="width:42px; height:42px; border-radius:50%; background:{{ t.iconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ t.iconSvg }}</div>
+            <div style="flex:1;">
+              <div style="font-size:15px; font-weight:700; text-decoration:{{ t.strike }};">{{ t.label }}</div>
+              <div style="font-size:12.5px; color:#9A9BB0;">{{ t.sub }}</div>
+            </div>
+            <div style="width:24px; height:24px; border-radius:50%; border:2px solid {{ t.checkBorder }}; background:{{ t.checkBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <sc-if value="{{ t.done }}" hint-placeholder-val="{{ false }}">
+                <svg width="12" height="9" viewBox="0 0 13 10"><path d="M1 5l4 4 7-8" stroke="#141833" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <button onclick="{{ goToSleepStart }}" style="margin-top:24px; width:100%; min-height:56px; box-sizing:border-box; padding:0 20px; border:none; border-radius:20px; background:linear-gradient(135deg,#B7A9F0,#93C2F2); color:#141833; font-size:16px; font-weight:700; font-family:inherit;">I'm ready for bed</button>
+    </div>
+  </sc-if>
+
+  <!-- ================= SLEEP START ================= -->
+  <sc-if value="{{ isSleepStart }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; display:flex; flex-direction:column; padding:56px 26px 40px; box-sizing:border-box; background:radial-gradient(ellipse at 50% 0%, {{ themeBg2 }}, {{ themeBg0 }} 70%);">
+      <button onclick="{{ backToHome }}" style="align-self:flex-start; width:36px; height:36px; border-radius:50%; border:none; background:{{ themeBg1 }}; display:flex; align-items:center; justify-content:center; margin-bottom:10px;">
+        <svg width="9" height="15" viewBox="0 0 9 15"><path d="M8 1L1.5 7.5 8 14" stroke="#F3F1EC" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+
+        <sc-if value="{{ isSleeping }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative; width:200px; height:200px; display:flex; align-items:center; justify-content:center; margin-bottom:22px;">
+            <div style="position:absolute; width:100%; height:100%; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.35), transparent 72%); animation:somniPulse 3.5s ease-in-out infinite;"></div>
+            <img src="{{ charImgSleeping }}" style="width:132px; height:132px; object-fit:cover; border-radius:50%; position:relative; box-shadow:0 10px 30px rgba(0,0,0,0.4);"/>
+          </div>
+          <div style="font-size:15px; color:#9A9BB0; margin-bottom:6px;">Sleeping since {{ sleepStartLabel }}</div>
+          <div style="font-size:32px; font-weight:800; margin-bottom:28px;">{{ sleepElapsedLabel }}</div>
+          <button onclick="{{ wakeUp }}" style="width:100%; min-height:56px; box-sizing:border-box; padding:0 20px; border:none; border-radius:20px; background:{{ themeBg1 }}; color:#F3F1EC; font-size:15.5px; font-weight:700; font-family:inherit;">I'm awake</button>
+        </sc-if>
+
+        <sc-if value="{{ isSleepIdle }}" hint-placeholder-val="{{ true }}">
+          <div style="position:relative; width:120px; height:120px; margin-bottom:22px; animation:somniFloat 4.5s ease-in-out infinite;">
+            <div style="position:absolute; inset:-20px; border-radius:50%; background:radial-gradient(circle, rgba(183,169,240,0.38), transparent 70%);"></div>
+            <img src="{{ charImg }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%; box-shadow:0 10px 28px rgba(0,0,0,0.38);"/>
+          </div>
+          <h2 style="font-size:22px; font-weight:800; margin:0 0 8px;">Lights out, {{ charName }}'s here</h2>
+          <p style="font-size:14px; color:#9A9BB0; margin:0 0 26px; max-width:250px;">Put your phone down and let the night take over. I'll be right here.</p>
+
+          <div style="display:flex; gap:10px; margin-bottom:22px;">
+            <sc-for list="{{ ambientOptions }}" as="a" hint-placeholder-count="3">
+              <div onclick="{{ a.select }}" style="padding:9px 16px; border-radius:100px; background:{{ a.bg }}; color:{{ a.color }}; font-size:13px; font-weight:600; cursor:pointer;">{{ a.label }}</div>
+            </sc-for>
+          </div>
+
+          <div onclick="{{ toggleBreathing }}" style="display:flex; align-items:center; gap:10px; margin-bottom:30px; cursor:pointer;">
+            <div style="width:16px; height:16px; border-radius:50%; background:{{ breathIconBg }};"></div>
+            <div style="font-size:13px; color:#9A9BB0;">Breathing guide {{ breathingLabel }}</div>
+          </div>
+
+          <sc-if value="{{ breathingOn }}" hint-placeholder-val="{{ false }}">
+            <div style="width:64px; height:64px; border-radius:50%; background:radial-gradient(circle, #9FE0C4, #93C2F2); animation:somniBreathe 4s ease-in-out infinite; margin-bottom:26px;"></div>
+          </sc-if>
+
+          <button onclick="{{ startSleep }}" style="width:100%; min-height:56px; box-sizing:border-box; padding:0 20px; border:none; border-radius:20px; background:linear-gradient(135deg,#B7A9F0,#93C2F2); color:#141833; font-size:16.5px; font-weight:700; font-family:inherit; box-shadow:0 8px 28px rgba(147,194,242,0.28);">Get ready for sleep</button>
+        </sc-if>
+
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= REPORT ================= -->
+  <sc-if value="{{ isReport }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; overflow-y:auto; padding:60px 22px 130px; box-sizing:border-box;">
+      <div style="font-size:22px; font-weight:800; margin-bottom:18px;">Sleep report</div>
+
+      <div style="background:{{ themeBg1 }}; border-radius:24px; padding:20px; margin-bottom:16px; display:flex; align-items:center; gap:16px;">
+        <div style="position:relative; width:72px; height:72px; flex-shrink:0;">
+          <div style="position:absolute; inset:-12px; border-radius:50%; background:radial-gradient(circle, rgba(159,224,196,0.35), transparent 70%);"></div>
+          <img src="{{ reportCharImg }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%;"/>
+        </div>
+        <div style="font-size:13.5px; line-height:1.5; color:#D8D6E8;">{{ reportMessage }}</div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-bottom:16px;">
+        <div style="flex:1; background:{{ themeBg1 }}; border-radius:18px; padding:16px;">
+          <div style="font-size:12px; color:#9A9BB0; margin-bottom:6px;">Duration</div>
+          <div style="font-size:19px; font-weight:800;">{{ reportDuration }}</div>
+        </div>
+        <div style="flex:1; background:{{ themeBg1 }}; border-radius:18px; padding:16px;">
+          <div style="font-size:12px; color:#9A9BB0; margin-bottom:6px;">Bedtime</div>
+          <div style="font-size:19px; font-weight:800;">{{ reportBedtime }}</div>
+        </div>
+        <div style="flex:1; background:{{ themeBg1 }}; border-radius:18px; padding:16px;">
+          <div style="font-size:12px; color:#9A9BB0; margin-bottom:6px;">Wake-up</div>
+          <div style="font-size:19px; font-weight:800;">{{ reportWake }}</div>
+        </div>
+      </div>
+
+      <div style="background:{{ themeBg1 }}; border-radius:20px; padding:20px;">
+        <div style="font-size:13px; color:#9A9BB0; margin-bottom:16px;">This week</div>
+        <div style="display:flex; align-items:flex-end; gap:8px; height:110px;">
+          <sc-for list="{{ weekly }}" as="w" hint-placeholder-count="7">
+            <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end;">
+              <div style="width:100%; border-radius:6px; height:{{ w.barH }}px; background:{{ w.bg }};"></div>
+              <div style="font-size:10.5px; color:#9A9BB0;">{{ w.day }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= SETTINGS ================= -->
+  <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; overflow-y:auto; padding:60px 22px 130px; box-sizing:border-box;">
+      <div style="font-size:22px; font-weight:800; margin-bottom:20px;">Settings</div>
+
+      <div style="font-size:12.5px; color:#9A9BB0; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.05em;">Companion</div>
+      <div style="display:flex; gap:10px; margin-bottom:22px;">
+        <sc-for list="{{ charOptions }}" as="c" hint-placeholder-count="3">
+          <div onclick="{{ c.select }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 8px; border-radius:16px; background:{{ c.bg }}; border:2px solid {{ c.border }}; cursor:pointer;">
+            <div style="position:relative; width:44px; height:44px;">
+              <div style="position:absolute; inset:-8px; border-radius:50%; background:radial-gradient({{ c.glow }}, transparent 70%); opacity:{{ c.glowOpacity }};"></div>
+              <img src="{{ c.img }}" style="position:relative; width:100%; height:100%; object-fit:cover; border-radius:50%;"/>
+            </div>
+            <div style="font-size:12px; font-weight:600;">{{ c.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="font-size:12.5px; color:#9A9BB0; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.05em;">Sleep goal</div>
+      <div style="background:{{ themeBg1 }}; border-radius:18px; padding:16px 18px; margin-bottom:22px; display:flex; align-items:center; justify-content:space-between;">
+        <div style="font-size:15px; font-weight:600;">{{ goalHours }} hours a night</div>
+        <div style="display:flex; gap:8px;">
+          <button onclick="{{ decGoal }}" style="width:34px; height:34px; border-radius:10px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:16px; font-family:inherit;">−</button>
+          <button onclick="{{ incGoal }}" style="width:34px; height:34px; border-radius:10px; border:none; background:{{ themeBg2 }}; color:#F3F1EC; font-size:16px; font-family:inherit;">+</button>
+        </div>
+      </div>
+
+      <div style="font-size:12.5px; color:#9A9BB0; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.05em;">Schedule</div>
+      <div style="background:{{ themeBg1 }}; border-radius:18px; margin-bottom:22px; overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:15px 18px; border-bottom:1px solid rgba(255,255,255,0.06);">
+          <div style="font-size:14.5px;">Bedtime</div>
+          <div style="font-size:14.5px; font-weight:700; color:#93C2F2;">{{ bedtimeDisp }}</div>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:15px 18px;">
+          <div style="font-size:14.5px;">Wake-up</div>
+          <div style="font-size:14.5px; font-weight:700; color:#93C2F2;">{{ waketimeDisp }}</div>
+        </div>
+      </div>
+
+      <div style="font-size:12.5px; color:#9A9BB0; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.05em;">Alerts</div>
+      <div style="background:{{ themeBg1 }}; border-radius:18px; margin-bottom:22px; overflow:hidden;">
+        <sc-for list="{{ toggles }}" as="tg" hint-placeholder-count="3">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:15px 18px; border-bottom:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:14.5px;">{{ tg.label }}</div>
+            <div onclick="{{ tg.toggle }}" style="width:46px; height:28px; border-radius:14px; background:{{ tg.trackBg }}; position:relative; cursor:pointer;">
+              <div style="position:absolute; top:2px; left:{{ tg.knobLeft }}px; width:24px; height:24px; border-radius:50%; background:#fff;"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="font-size:12.5px; color:#9A9BB0; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.05em;">Appearance</div>
+      <div style="display:flex; gap:10px;">
+        <sc-for list="{{ themeOptions }}" as="th" hint-placeholder-count="2">
+          <div onclick="{{ th.select }}" style="flex:1; display:flex; align-items:center; gap:10px; padding:14px; border-radius:16px; background:{{ th.bg }}; border:2px solid {{ th.border }}; cursor:pointer;">
+            <div style="width:22px; height:22px; border-radius:50%; background:{{ th.swatch }};"></div>
+            <div style="font-size:13.5px; font-weight:600;">{{ th.label }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ================= TAB BAR ================= -->
+  <sc-if value="{{ showTabBar }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute; bottom:0; left:0; right:0; display:flex; padding:10px 12px 34px; background:rgba(13,16,32,0.88); backdrop-filter:blur(16px); border-top:1px solid rgba(255,255,255,0.06); box-sizing:border-box;">
+      <div onclick="{{ goToHome }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; min-height:44px; justify-content:center;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="{{ tabHomeColor }}" stroke-width="1.8"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg>
+        <div style="font-size:10.5px; font-weight:600; color:{{ tabHomeColor }};">Home</div>
+      </div>
+      <div onclick="{{ goToRoutine }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; min-height:44px; justify-content:center;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="{{ tabRoutineColor }}" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3.2 2"/></svg>
+        <div style="font-size:10.5px; font-weight:600; color:{{ tabRoutineColor }};">Routine</div>
+      </div>
+      <div onclick="{{ goToReport }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; min-height:44px; justify-content:center;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="{{ tabReportColor }}" stroke-width="1.8"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="3" width="4" height="17" rx="1"/></svg>
+        <div style="font-size:10.5px; font-weight:600; color:{{ tabReportColor }};">Report</div>
+      </div>
+      <div onclick="{{ goToSettings }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; cursor:pointer; min-height:44px; justify-content:center;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="{{ tabSettingsColor }}" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M4.2 7.2l1.7 1.7M18.1 15.1l1.7 1.7M3 12h2.4M18.6 12H21M4.2 16.8l1.7-1.7M18.1 8.9l1.7-1.7"/></svg>
+        <div style="font-size:10.5px; font-weight:600; color:{{ tabSettingsColor }};">Settings</div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-import>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toMin(hhmm) { const [h, m] = hhmm.split(':').map(Number); return h * 60 + m; }
+function fromMin(total) { total = ((total % 1440) + 1440) % 1440; return pad2(Math.floor(total / 60)) + ':' + pad2(total % 60); }
+function fmt12(hhmm) { const [h, m] = hhmm.split(':').map(Number); const ap = h >= 12 ? 'PM' : 'AM'; let h12 = h % 12; if (h12 === 0) h12 = 12; return h12 + ':' + pad2(m) + ' ' + ap; }
+
+class Component extends DCLogic {
+  state = {
+    screen: 'onboarding', obStep: 0,
+    character: 'cat',
+    goalHours: 8, bedtime: '22:30', waketime: '06:30',
+    theme: 'navy',
+    showNudge: true,
+    routineTasks: [
+      { id: 'meditate', label: 'Meditation', sub: '5 min guided calm', icon: 'moon', done: false },
+      { id: 'sounds', label: 'Ambient sounds', sub: 'Rain or white noise', icon: 'wave', done: false },
+      { id: 'stretch', label: 'Stretching', sub: 'Gentle wind-down', icon: 'diamond', done: false },
+      { id: 'breathe', label: 'Breathing', sub: 'Slow 4-7-8 breathing', icon: 'ring', done: false },
+      { id: 'journal', label: 'Journaling', sub: 'Reflect on your day', icon: 'book', done: false },
+    ],
+    sleepPhase: 'idle', sleepStartTime: null, simElapsedMin: 0,
+    ambient: null, breathingOn: false,
+    alarmOn: true, soundsOn: true, notifOn: false,
+    now: new Date(),
+    report: null,
+  };
+
+  componentDidMount() {
+    this._clock = setInterval(() => this.setState({ now: new Date() }), 20000);
+  }
+  componentWillUnmount() {
+    clearInterval(this._clock);
+    clearInterval(this._sleepTick);
+  }
+
+  charImg(expr) { return 'assets/' + this.state.character + '-' + expr + '.png'; }
+
+  startSleep() {
+    const start = Date.now();
+    this.setState({ sleepPhase: 'sleeping', sleepStartTime: new Date(), simElapsedMin: 0 });
+    this._sleepTick = setInterval(() => {
+      const simMin = Math.floor((Date.now() - start) / 1000 * 6);
+      this.setState({ simElapsedMin: simMin });
+    }, 1000);
+  }
+
+  wakeUp() {
+    clearInterval(this._sleepTick);
+    const durationMin = Math.max(this.state.simElapsedMin, 25);
+    const wakeNow = new Date();
+    const goalMin = this.state.goalHours * 60;
+    const weekly = [
+      { day: 'Mon', min: 402 }, { day: 'Tue', min: 432 }, { day: 'Wed', min: 468 },
+      { day: 'Thu', min: 372 }, { day: 'Fri', min: 486 }, { day: 'Sat', min: 444 },
+    ];
+    weekly.push({ day: 'Today', min: durationMin });
+    this.setState({
+      screen: 'report',
+      sleepPhase: 'idle',
+      report: {
+        durationMin, wakeLabel: pad2(wakeNow.getHours()) + ':' + pad2(wakeNow.getMinutes()),
+        wakeDate: wakeNow, weekly, good: durationMin >= goalMin - 30,
+      },
+    });
+  }
+
+  renderVals() {
+    const s = this.state;
+    const themes = {
+      navy: { bg0: '#0d1020', bg1: '#151933', bg2: '#1c2145' },
+      charcoal: { bg0: '#17171c', bg1: '#202025', bg2: '#2a2a31' },
+    };
+    const th = themes[s.theme];
+    const themeVars = '--t0:' + th.bg0 + ';--t1:' + th.bg1 + ';--t2:' + th.bg2 + ';';
+
+    const charNames = { cat: 'your cat', bat: 'your bat', owl: 'your owl' };
+    const charLabels = { cat: 'Cat', bat: 'Bat', owl: 'Owl' };
+    const charTaglines = { cat: 'Curious and cozy', bat: 'Quiet night flyer', owl: 'Wise and watchful' };
+
+    const charGlows = { cat: 'circle,rgba(147,194,242,0.4)', bat: 'circle,rgba(183,169,240,0.4)', owl: 'circle,rgba(241,231,208,0.4)' };
+    const charOptions = ['cat', 'bat', 'owl'].map(id => ({
+      id, label: charLabels[id], tagline: charTaglines[id],
+      img: 'assets/' + id + '-sleepy.png',
+      glow: charGlows[id], glowOpacity: s.character === id ? 1 : 0.5,
+      selected: s.character === id,
+      bg: s.character === id ? th.bg2 : th.bg1,
+      border: s.character === id ? '#9FE0C4' : 'transparent',
+      select: () => this.setState({ character: id }),
+    }));
+
+    // onboarding
+    const dots = [0, 1, 2].map(i => ({ w: i === s.obStep ? 22 : 8, bg: i === s.obStep ? '#B7A9F0' : th.bg2 }));
+
+    // clock / countdown
+    const now = s.now;
+    const nowLabel = fmt12(pad2(now.getHours()) + ':' + pad2(now.getMinutes()));
+    let bedtimeTarget = new Date(now); const [bh, bm] = s.bedtime.split(':').map(Number);
+    bedtimeTarget.setHours(bh, bm, 0, 0);
+    if (bedtimeTarget <= now) bedtimeTarget.setDate(bedtimeTarget.getDate() + 1);
+    const diffMs = bedtimeTarget - now;
+    const diffH = Math.floor(diffMs / 3600000), diffM = Math.floor((diffMs % 3600000) / 60000);
+    const timeRemainingLabel = diffH > 0 ? diffH + 'h ' + diffM + 'm' : diffM + 'm';
+
+    const hour = now.getHours();
+    const greeting = hour < 5 ? 'Still up' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
+    // routine
+    const doneCount = s.routineTasks.filter(t => t.done).length;
+    const iconSvgs = {
+      moon: '<div style="width:16px;height:16px;border-radius:50%;background:#F1E7D0;box-shadow:inset 5px -2px 0 0 ' + th.bg1 + ';"></div>',
+      wave: '<div style="display:flex;align-items:flex-end;gap:2px;height:16px;"><div style="width:3px;height:8px;background:#93C2F2;border-radius:1px;"></div><div style="width:3px;height:16px;background:#93C2F2;border-radius:1px;"></div><div style="width:3px;height:11px;background:#93C2F2;border-radius:1px;"></div></div>',
+      diamond: '<div style="width:13px;height:13px;background:#9FE0C4;transform:rotate(45deg);border-radius:3px;"></div>',
+      ring: '<div style="width:16px;height:16px;border-radius:50%;border:3px solid #B7A9F0;"></div>',
+      book: '<div style="width:16px;height:13px;border-radius:2px;background:#F1E7D0;position:relative;"><div style="position:absolute;top:5px;left:2px;width:12px;height:1.5px;background:' + th.bg1 + ';"></div></div>',
+    };
+    const routineTasks = s.routineTasks.map(t => ({
+      ...t, bg: th.bg1, sub: t.sub,
+      strike: t.done ? 'line-through' : 'none',
+      checkBorder: t.done ? '#9FE0C4' : 'rgba(255,255,255,0.2)',
+      checkBg: t.done ? '#9FE0C4' : 'transparent',
+      iconBg: th.bg2, iconSvg: iconSvgs[t.icon],
+      toggle: () => this.setState({ routineTasks: s.routineTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) }),
+    }));
+
+    // sleep start
+    const simH = Math.floor(s.simElapsedMin / 60), simM = s.simElapsedMin % 60;
+    const ambientList = [
+      { id: 'rain', label: 'Rain' }, { id: 'noise', label: 'White noise' }, { id: 'silence', label: 'Silence' },
+    ].map(a => ({
+      ...a, bg: s.ambient === a.id ? '#93C2F2' : th.bg1, color: s.ambient === a.id ? '#141833' : '#D8D6E8',
+      select: () => this.setState({ ambient: a.id }),
+    }));
+
+    // settings toggles
+    const toggles = [
+      { key: 'alarmOn', label: 'Smart alarm', on: s.alarmOn },
+      { key: 'soundsOn', label: 'Sounds', on: s.soundsOn },
+      { key: 'notifOn', label: 'Bedtime reminders', on: s.notifOn },
+    ].map(t => ({
+      label: t.label, trackBg: t.on ? '#9FE0C4' : th.bg2, knobLeft: t.on ? 20 : 2,
+      toggle: () => this.setState({ [t.key]: !t.on }),
+    }));
+
+    const themeOptions = [
+      { id: 'navy', label: 'Deep navy', swatch: '#141833' },
+      { id: 'charcoal', label: 'Charcoal', swatch: '#232327' },
+    ].map(t => ({
+      ...t, bg: s.theme === t.id ? th.bg2 : th.bg1, border: s.theme === t.id ? '#9FE0C4' : 'transparent',
+      select: () => this.setState({ theme: t.id }),
+    }));
+
+    // report
+    const r = s.report || { durationMin: 456, wakeLabel: fromMin(toMin(s.waketime)), weekly: [
+      { day: 'Mon', min: 402 }, { day: 'Tue', min: 432 }, { day: 'Wed', min: 468 }, { day: 'Thu', min: 372 },
+      { day: 'Fri', min: 486 }, { day: 'Sat', min: 444 }, { day: 'Today', min: 456 },
+    ], good: true };
+    const rH = Math.floor(r.durationMin / 60), rM = r.durationMin % 60;
+    const maxMin = Math.max(...r.weekly.map(w => w.min));
+    const weekly = r.weekly.map(w => ({ day: w.day, barH: Math.round((w.min / maxMin) * 92) + 8, bg: w.day === 'Today' ? '#B7A9F0' : th.bg2 }));
+
+    return {
+      screen: s.screen,
+      isOnboarding: s.screen === 'onboarding',
+      isHome: s.screen === 'home', isRoutine: s.screen === 'routine',
+      isSleepStart: s.screen === 'sleepstart', isReport: s.screen === 'report', isSettings: s.screen === 'settings',
+      showTabBar: ['home', 'routine', 'report', 'settings'].includes(s.screen),
+      themeBg0: th.bg0, themeBg1: th.bg1, themeBg2: th.bg2, themeVars,
+
+      obStep0: s.obStep === 0, obStep1: s.obStep === 1, obStep2: s.obStep === 2, obDots: dots,
+      goObStep1: () => this.setState({ obStep: 1 }), goObStep2: () => this.setState({ obStep: 2 }),
+      charOptions,
+      goalHours: s.goalHours,
+      incGoal: () => this.setState({ goalHours: Math.min(10, s.goalHours + 0.5) }),
+      decGoal: () => this.setState({ goalHours: Math.max(5, s.goalHours - 0.5) }),
+      bedtimeDisp: fmt12(s.bedtime), waketimeDisp: fmt12(s.waketime),
+      bedtimePlus: () => this.setState({ bedtime: fromMin(toMin(s.bedtime) + 15) }),
+      bedtimeMinus: () => this.setState({ bedtime: fromMin(toMin(s.bedtime) - 15) }),
+      waketimePlus: () => this.setState({ waketime: fromMin(toMin(s.waketime) + 15) }),
+      waketimeMinus: () => this.setState({ waketime: fromMin(toMin(s.waketime) - 15) }),
+      finishOnboarding: () => this.setState({ screen: 'home' }),
+
+      character: s.character, charName: charNames[s.character],
+      charImg: this.charImg('sleepy'), charImgPouty: this.charImg('pouty'), charImgSleeping: this.charImg('sleeping'),
+      greeting, nowTime: nowLabel, timeRemainingLabel,
+      showNudge: s.showNudge, dismissNudge: () => this.setState({ showNudge: false }),
+      lastNightHours: '7h 20m', lastNightTag: 'Restful',
+      goToRoutine: () => this.setState({ screen: 'routine' }),
+      backToHome: () => this.setState({ screen: 'home' }),
+      goToHome: () => this.setState({ screen: 'home' }),
+      goToReport: () => this.setState({ screen: 'report' }),
+      goToSettings: () => this.setState({ screen: 'settings' }),
+      goToSleepStart: () => this.setState({ screen: 'sleepstart' }),
+
+      routineTasks, routinePct: Math.round((doneCount / s.routineTasks.length) * 100),
+      routineDoneCount: doneCount, routineTotal: s.routineTasks.length,
+
+      isSleeping: s.sleepPhase === 'sleeping', isSleepIdle: s.sleepPhase === 'idle',
+      sleepStartLabel: s.sleepStartTime ? fmt12(pad2(s.sleepStartTime.getHours()) + ':' + pad2(s.sleepStartTime.getMinutes())) : '',
+      sleepElapsedLabel: simH + 'h ' + pad2(simM) + 'm',
+      startSleep: () => this.startSleep(), wakeUp: () => this.wakeUp(),
+      ambientOptions: ambientList,
+      breathingOn: s.breathingOn, breathingLabel: s.breathingOn ? 'on' : 'off',
+      breathIconBg: s.breathingOn ? '#9FE0C4' : th.bg2,
+      toggleBreathing: () => this.setState({ breathingOn: !s.breathingOn }),
+
+      reportCharImg: this.charImg(r.good ? 'sleeping' : 'tired'),
+      reportMessage: r.good
+        ? "Nice and steady. You're building a rhythm your body can rely on — keep it gentle."
+        : "Shorter night than usual. No judgment here — tonight's a good one to wind down a little earlier.",
+      reportDuration: rH + 'h ' + pad2(rM) + 'm',
+      reportBedtime: fmt12(s.bedtime), reportWake: fmt12(r.wakeLabel || s.waketime),
+      weekly,
+
+      toggles, themeOptions,
+      tabHomeColor: s.screen === 'home' ? '#B7A9F0' : '#7B7D91',
+      tabRoutineColor: s.screen === 'routine' ? '#B7A9F0' : '#7B7D91',
+      tabReportColor: s.screen === 'report' ? '#B7A9F0' : '#7B7D91',
+      tabSettingsColor: s.screen === 'settings' ? '#B7A9F0' : '#7B7D91',
+    };
+  }
+}
+
+</script>
+</body>
+</html>
