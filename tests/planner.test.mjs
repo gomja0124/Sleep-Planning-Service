@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyPlanOffset,
   calculateRecommendation,
   feedbackAdjustment,
+  formatDisplayTime,
   formatTime,
   scheduleAppliesToDate,
 } from "../src/planner.mjs";
@@ -17,6 +19,12 @@ const profile = {
 test("시간은 자정을 넘어도 24시간 형식으로 정규화한다", () => {
   assert.equal(formatTime(-15), "23:45");
   assert.equal(formatTime(24 * 60 + 20), "00:20");
+});
+
+test("설정에 따라 12시간제와 24시간제를 표시한다", () => {
+  assert.equal(formatDisplayTime("00:05", "24h"), "00:05");
+  assert.equal(formatDisplayTime("00:05", "12h"), "오전 12:05");
+  assert.equal(formatDisplayTime("13:30", "12h"), "오후 1:30");
 });
 test("고정 일정은 선택한 요일에만 적용한다", () => {
   const monday = new Date(2026, 7, 3, 12);
@@ -89,4 +97,39 @@ test("최근 컨디션이 나쁘면 다음 추천의 수면 여유를 늘린다"
   });
   assert.equal(result.feedbackAdjustmentMinutes, 30);
   assert.equal(result.bedtimeCenter, "23:10");
+});
+
+test("불 끄기 계획을 5분 단위로 조절하고 기상 시각은 유지한다", () => {
+  const base = calculateRecommendation({
+    profile,
+    targetDate: new Date(2026, 7, 7, 12),
+  });
+  const later = applyPlanOffset(base, 7);
+
+  assert.equal(later.userOffsetMinutes, 5);
+  assert.equal(later.bedtimeCenter, "23:45");
+  assert.equal(later.routineStart, "23:00");
+  assert.equal(later.wakeTime, base.wakeTime);
+  assert.equal(later.sleepMinutes, base.sleepMinutes - 5);
+  assert.equal(later.alerts.find((alert) => alert.type === "wake").time, base.wakeTime);
+});
+
+test("불 끄기 조절은 자정 경계를 올바르게 넘는다", () => {
+  const shifted = applyPlanOffset({
+    bedtimeWindowStart: "23:55",
+    bedtimeWindowEnd: "00:25",
+    bedtimeCenter: "00:10",
+    routineStart: "23:25",
+    wakeTime: "07:30",
+    sleepMinutes: 450,
+    alerts: [
+      { type: "routine", time: "23:25" },
+      { type: "lights-out", time: "23:55" },
+      { type: "wake", time: "07:30" },
+    ],
+  }, 10);
+
+  assert.equal(shifted.bedtimeWindowStart, "00:05");
+  assert.equal(shifted.bedtimeWindowEnd, "00:35");
+  assert.equal(shifted.routineStart, "23:35");
 });

@@ -1,8 +1,10 @@
 import {
   DAY_NAMES,
   addDays,
+  applyPlanOffset,
   dateKey,
   feedbackAdjustment,
+  formatDisplayTime,
   formatDuration,
   formatKoreanDate,
   generateRecommendations,
@@ -23,6 +25,17 @@ const CHARACTER_OPTIONS = {
   },
 };
 
+const COMMUNITY_POSTS = [
+  { type: "모집", title: "서울대 멋사 낮밤바꾸기 취침팟", meta: "오늘 23:50 · 8명 참여", copy: "자정 전에 같이 불 끄고 아침 체크까지 해요." },
+  { type: "도전", title: "1주일 동안 50시간 자기", meta: "3일 남음 · 32/50시간", copy: "무리한 몰아자기 없이 매일 기록을 채우는 누적 도전이에요." },
+  { type: "시즌", title: "개강 리듬 회복 주간", meta: "한정 달 쿠션 보상", copy: "첫 수업 시간에 맞춰 5일 동안 기상 체크를 완료해요." },
+];
+
+const CHALLENGES = [
+  { id: "midnight", title: "12시 취침팟", goal: "오늘 00:00 전에 불 끄기", progress: 72, people: 18, reward: 30 },
+  { id: "fifty-hours", title: "7일 50시간 수면", goal: "현재 32시간 · 18시간 남음", progress: 64, people: 42, reward: 80 },
+];
+
 const icons = {
   moon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.4 15.1A8.5 8.5 0 0 1 8.9 3.6 8.5 8.5 0 1 0 20.4 15.1Z"/></svg>`,
   home: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z"/></svg>`,
@@ -37,6 +50,10 @@ const icons = {
   spark: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Zm7 14 .7 2.3L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-.7L19 16Z"/></svg>`,
   clock: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`,
   route: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h2a3 3 0 0 0 3-3V9a3 3 0 0 1 3-3"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m7-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.9m-2-12a4 4 0 0 1 0 7.8"/></svg>`,
+  gift: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12v9H4v-9M2 7h20v5H2V7Zm10 14V7m0 0H8.5A2.5 2.5 0 1 1 11 4.5V7Zm0 0h3.5A2.5 2.5 0 1 0 13 4.5V7Z"/></svg>`,
+  refresh: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5m9.5-3A8 8 0 0 0 5.2 6M5.5 15A8 8 0 0 0 18.8 18"/></svg>`,
+  minus: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>`,
 };
 
 const icon = (name) => `<span class="icon">${icons[name]}</span>`;
@@ -59,6 +76,7 @@ function seedState() {
   const tomorrow = addDays(new Date(), 1);
   return {
     selectedCharacter: null,
+    onboardingComplete: false,
     profile: {
       name: "도경",
       targetWake: "07:30",
@@ -98,6 +116,14 @@ function seedState() {
     ],
     feedback: [],
     alertSettings: { routine: true, "lights-out": true, wake: true },
+    settings: { timeFormat: "24h" },
+    calendarConnections: {
+      apple: { connected: false, lastSyncedAt: null },
+      google: { connected: false, lastSyncedAt: null },
+    },
+    planOverrides: {},
+    sleepSession: { status: "idle", startedAt: null, dismissedAt: null, targetDate: null },
+    community: { points: 120, groupStreak: 6, joinedChallenges: ["midnight"] },
     savedPlanDate: null,
   };
 }
@@ -106,8 +132,24 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved?.profile && Array.isArray(saved.schedules) && Array.isArray(saved.feedback)) {
+      const base = seedState();
       const selectedCharacter = CHARACTER_OPTIONS[saved.selectedCharacter] ? saved.selectedCharacter : null;
-      return { ...saved, selectedCharacter };
+      return {
+        ...base,
+        ...saved,
+        selectedCharacter,
+        onboardingComplete: Boolean(saved.onboardingComplete),
+        profile: { ...base.profile, ...saved.profile },
+        alertSettings: { ...base.alertSettings, ...saved.alertSettings },
+        settings: { ...base.settings, ...saved.settings },
+        calendarConnections: {
+          apple: { ...base.calendarConnections.apple, ...saved.calendarConnections?.apple },
+          google: { ...base.calendarConnections.google, ...saved.calendarConnections?.google },
+        },
+        planOverrides: { ...base.planOverrides, ...saved.planOverrides },
+        sleepSession: { ...base.sleepSession, ...saved.sleepSession },
+        community: { ...base.community, ...saved.community },
+      };
     }
   } catch (error) {
     console.warn("저장된 데모 데이터를 불러오지 못했습니다.", error);
@@ -117,7 +159,13 @@ function loadState() {
 
 let state = loadState();
 const ui = {
-  view: "today",
+  view: state.sleepSession.status === "sleeping"
+    ? "sleep"
+    : state.sleepSession.status === "alarm"
+      ? "alarm"
+      : state.sleepSession.status === "checking"
+        ? "feedback"
+        : "today",
   characterDraft: state.selectedCharacter,
   showReason: true,
   scheduleType: "fixed",
@@ -138,7 +186,15 @@ function getPlans() {
     feedback: state.feedback,
     startDate: addDays(new Date(), 1),
     days: 7,
-  });
+  }).map((plan) => applyPlanOffset(plan, state.planOverrides[plan.targetDate] ?? 0));
+}
+
+function displayTime(value) {
+  return formatDisplayTime(value, state.settings.timeFormat);
+}
+
+function connectedCalendars() {
+  return Object.values(state.calendarConnections).filter((connection) => connection.connected).length;
 }
 
 function shortDate(date) {
@@ -172,7 +228,7 @@ function shell(content) {
         <nav class="side-nav" aria-label="주요 메뉴">
           ${navItem("today", "오늘", "home")}
           ${navItem("schedule", "일정", "calendar")}
-          ${navItem("feedback", "기상 체크", "check")}
+          ${navItem("community", "커뮤니티", "users")}
           ${navItem("rhythm", "내 리듬", "chart")}
         </nav>
         <div class="phase-card">
@@ -197,7 +253,7 @@ function shell(content) {
       <nav class="bottom-nav" aria-label="모바일 메뉴">
         ${navItem("today", "오늘", "home")}
         ${navItem("schedule", "일정", "calendar")}
-        ${navItem("feedback", "기상 체크", "check")}
+        ${navItem("community", "커뮤니티", "users")}
         ${navItem("rhythm", "내 리듬", "chart")}
       </nav>
       ${ui.toast ? `<div class="toast" role="status">${icon("check")} ${escapeHtml(ui.toast)}</div>` : ""}
@@ -241,6 +297,45 @@ function renderCharacterOnboarding() {
   </main>`;
 }
 
+function renderRhythmOnboarding() {
+  const selected = state.selectedCharacter ?? "owl";
+  const option = CHARACTER_OPTIONS[selected];
+  return `<main class="rhythm-onboarding">
+    <header class="onboarding-header rhythm-onboarding-header">
+      <button class="onboarding-back" data-action="change-character" aria-label="캐릭터 선택으로 돌아가기">${icon("arrow")}</button>
+      <span class="brand-mark">${icon("moon")}</span>
+      <span><b>밤가이</b><small>내 리듬 초기 설정</small></span>
+    </header>
+    <section class="rhythm-onboarding-layout">
+      <div class="rhythm-intro">
+        <span class="onboarding-step">내 리듬 · 2 / 2</span>
+        ${characterArtwork(selected, "rhythm-character-art")}
+        <h1>${option.name}에게<br>도경님의 기준을 알려주세요.</h1>
+        <p>두 가지만 입력하면 오늘 지킬 수 있는 취침 계획을 바로 만들어요. 캘린더 연결은 선택입니다.</p>
+      </div>
+      <form id="onboarding-form" class="onboarding-form-card">
+        <div class="onboarding-form-heading"><span>필수 설정</span><b>언제 일어나고, 얼마나 자고 싶나요?</b></div>
+        <div class="form-grid two">
+          <label class="field"><span>일어나야 할 시간</span><input name="targetWake" type="time" value="${state.profile.targetWake}" required></label>
+          <label class="field"><span>원하는 수면 길이</span><select name="targetSleepMinutes" required>
+            ${[360,390,420,450,480,510,540].map((minutes) => `<option value="${minutes}" ${state.profile.targetSleepMinutes === minutes ? "selected" : ""}>${formatDuration(minutes)}</option>`).join("")}
+          </select></label>
+        </div>
+        <fieldset class="field onboarding-choice-field"><legend>시간 표시</legend><div class="segmented radio-segmented">
+          <label><input type="radio" name="timeFormat" value="24h" ${state.settings.timeFormat === "24h" ? "checked" : ""}><span>24시간제<small>23:30</small></span></label>
+          <label><input type="radio" name="timeFormat" value="12h" ${state.settings.timeFormat === "12h" ? "checked" : ""}><span>12시간제<small>오후 11:30</small></span></label>
+        </div></fieldset>
+        <fieldset class="field onboarding-choice-field"><legend>캘린더 연결 <small>선택</small></legend><div class="calendar-choice-list">
+          <label class="calendar-choice"><input type="checkbox" name="calendarProvider" value="apple" ${state.calendarConnections.apple.connected ? "checked" : ""}><span class="calendar-logo apple">A</span><span><b>Apple Calendar</b><small>iPhone 일정 변경을 계획에 반영</small></span><i>${icon("check")}</i></label>
+          <label class="calendar-choice"><input type="checkbox" name="calendarProvider" value="google" ${state.calendarConnections.google.connected ? "checked" : ""}><span class="calendar-logo google">G</span><span><b>Google Calendar</b><small>학교·개인 일정을 선택 연결</small></span><i>${icon("check")}</i></label>
+        </div></fieldset>
+        <p class="permission-copy">현재 웹 프로토타입에서는 연결 상태만 저장합니다. 실제 일정 권한과 자동 동기화는 iOS PoC에서 연결합니다.</p>
+        <button class="primary-button full onboarding-submit" type="submit">내 리듬 만들고 시작하기 ${icon("arrow")}</button>
+      </form>
+    </section>
+  </main>`;
+}
+
 function renderReasons(plan) {
   if (!ui.showReason) return "";
   return `<div class="reason-panel">
@@ -254,21 +349,30 @@ function renderToday() {
   const isSaved = state.savedPlanDate === plan.targetDate;
   const primary = plan.primarySchedule;
   const adjustment = feedbackAdjustment(state.feedback);
+  const offsetLabel = plan.userOffsetMinutes
+    ? `${plan.userOffsetMinutes > 0 ? "+" : ""}${plan.userOffsetMinutes}분 조절됨`
+    : "추천값";
 
   return `
     <section class="page-heading">
       <div><span class="section-kicker">GOOD EVENING</span><h1>오늘 밤, 이 리듬이면 괜찮아요.</h1><p>내일 일정과 최근 컨디션을 반영한 도경님의 수면 계획이에요.</p></div>
-      <span class="live-chip"><i></i> ${state.profile.adaptationWeek}주차 개인화 진행 중</span>
+      <span class="live-chip"><i></i> ${connectedCalendars() ? `캘린더 ${connectedCalendars()}개 동기화 중` : `${state.profile.adaptationWeek}주차 개인화 진행 중`}</span>
     </section>
 
     <section class="hero-card">
       <div class="hero-copy">
         <span class="hero-label">${icon("spark")} ${formatKoreanDate(plan.date)} 계획</span>
         <p class="hero-caption">권장 불 끄기 구간</p>
-        <h2>${plan.bedtimeWindowStart}<span>—</span>${plan.bedtimeWindowEnd}</h2>
-        <p class="hero-sub">${plan.wakeTime} 기상 · ${formatDuration(plan.sleepMinutes)} 확보 목표</p>
+        <h2>${displayTime(plan.bedtimeWindowStart)}<span>—</span>${displayTime(plan.bedtimeWindowEnd)}</h2>
+        <p class="hero-sub">${displayTime(plan.wakeTime)} 기상 · ${formatDuration(plan.sleepMinutes)} 확보 예상</p>
+        <div class="time-stepper" aria-label="불 끄기 시각 5분 단위 조절">
+          <button data-action="adjust-lights-out" data-delta="-5" aria-label="불 끄기 시각 5분 당기기">${icon("minus")}<span>5분</span></button>
+          <strong><small>불 끄기 조절</small>${offsetLabel}</strong>
+          <button data-action="adjust-lights-out" data-delta="5" aria-label="불 끄기 시각 5분 미루기"><span>5분</span>${icon("plus")}</button>
+        </div>
         <div class="hero-actions">
-          <button class="primary-button light" data-action="save-plan">${isSaved ? `${icon("check")} 오늘 계획 저장됨` : "오늘 계획으로 저장"}</button>
+          <button class="primary-button light" data-action="start-sleep">${icon("moon")} 수면 시작</button>
+          <button class="text-button light-text" data-action="save-plan">${isSaved ? `${icon("check")} 계획 저장됨` : "오늘 계획 저장"}</button>
           <button class="text-button light-text" data-action="toggle-reason">${ui.showReason ? "근거 접기" : "계산 근거 보기"} ${icon("arrow")}</button>
         </div>
       </div>
@@ -284,7 +388,7 @@ function renderToday() {
         <div class="timeline">
           ${plan.alerts.map((alert, index) => `<div class="timeline-row">
             <div class="timeline-marker ${alert.type}">${index === 0 ? icon("moon") : index === 1 ? icon("spark") : icon("bell")}</div>
-            <div><span>${alert.label}</span><b>${alert.time}</b></div>
+            <div><span>${alert.label}</span><b>${displayTime(alert.time)}</b></div>
             <span class="timeline-status">${state.alertSettings[alert.type] ? "알림 켬" : "알림 끔"}</span>
           </div>`).join("")}
         </div>
@@ -292,16 +396,16 @@ function renderToday() {
 
       <section class="card next-card">
         <div class="card-heading"><div><span class="card-kicker">TOMORROW</span><h3>내일 첫 일정</h3></div><button class="icon-button bordered" data-view="schedule" aria-label="일정 보기">${icon("arrow")}</button></div>
-        ${primary ? `<div class="event-time"><b>${primary.startTime}</b><span>${escapeHtml(primary.title)}</span></div>
+        ${primary ? `<div class="event-time"><b>${displayTime(primary.startTime)}</b><span>${escapeHtml(primary.title)}</span></div>
           <div class="event-meta"><span>${icon("route")} 통학 ${primary.commuteMinutes}분</span><span>${icon("clock")} 준비 ${primary.preparationMinutes}분</span></div>
-          <div class="wake-callout"><span>필요 기상</span><strong>${plan.wakeTime}</strong></div>` : `<div class="empty-compact">내일 등록된 이른 일정이 없어요.<br>희망 기상 시각을 유지합니다.</div>`}
+          <div class="wake-callout"><span>필요 기상</span><strong>${displayTime(plan.wakeTime)}</strong></div>` : `<div class="empty-compact">내일 등록된 이른 일정이 없어요.<br>희망 기상 시각을 유지합니다.</div>`}
       </section>
 
       <section class="card alerts-card">
         <div class="card-heading"><div><span class="card-kicker">REMINDERS</span><h3>루틴 알림</h3></div>${icon("bell")}</div>
         <div class="setting-list">
           ${plan.alerts.map((alert) => `<button class="setting-row" data-action="toggle-alert" data-alert="${alert.type}">
-            <span><b>${alert.label}</b><small>${alert.time}</small></span><i class="switch ${state.alertSettings[alert.type] ? "on" : ""}"><span></span></i>
+            <span><b>${alert.label}</b><small>${displayTime(alert.time)}</small></span><i class="switch ${state.alertSettings[alert.type] ? "on" : ""}"><span></span></i>
           </button>`).join("")}
         </div>
       </section>
@@ -310,8 +414,8 @@ function renderToday() {
     <section class="card week-card">
       <div class="card-heading"><div><span class="card-kicker">NEXT 7 DAYS</span><h3>이번 주 리듬 미리보기</h3></div><button class="text-button" data-view="rhythm">전체 계획 ${icon("arrow")}</button></div>
       <div class="week-strip">
-        <div class="day-plan is-today"><span>${shortDate(plan.date)}</span><b>${plan.bedtimeWindowStart}</b><small>${plan.primarySchedule?.title ?? "희망 기상 기준"}</small></div>
-        ${laterPlans.slice(0, 5).map((item) => `<div class="day-plan"><span>${shortDate(item.date)}</span><b>${item.bedtimeWindowStart}</b><small>${escapeHtml(item.primarySchedule?.title ?? "기본 리듬")}</small></div>`).join("")}
+        <div class="day-plan is-today"><span>${shortDate(plan.date)}</span><b>${displayTime(plan.bedtimeWindowStart)}</b><small>${plan.primarySchedule?.title ?? "희망 기상 기준"}</small></div>
+        ${laterPlans.slice(0, 5).map((item) => `<div class="day-plan"><span>${shortDate(item.date)}</span><b>${displayTime(item.bedtimeWindowStart)}</b><small>${escapeHtml(item.primarySchedule?.title ?? "기본 리듬")}</small></div>`).join("")}
       </div>
     </section>`;
 }
@@ -326,7 +430,7 @@ function scheduleWhen(schedule) {
 
 function scheduleCard(schedule) {
   return `<article class="schedule-item">
-    <div class="schedule-date-box"><b>${schedule.startTime}</b><span>${schedule.kind === "fixed" ? "고정" : "변동"}</span></div>
+    <div class="schedule-date-box"><b>${displayTime(schedule.startTime)}</b><span>${schedule.kind === "fixed" ? "고정" : "변동"}</span></div>
     <div class="schedule-body"><h4>${escapeHtml(schedule.title)}</h4><p>${scheduleWhen(schedule)}</p><div><span>준비 ${schedule.preparationMinutes}분</span><span>통학 ${schedule.commuteMinutes}분</span></div></div>
     <div class="schedule-actions">
       <button class="icon-button bordered" data-action="edit-schedule" data-id="${schedule.id}" aria-label="${escapeHtml(schedule.title)} 수정">${icon("edit")}</button>
@@ -395,7 +499,7 @@ function feedbackCard(entry) {
   const freshnessLabels = ["매우 피곤", "피곤", "보통", "개운", "매우 개운"];
   return `<article class="feedback-item">
     <div class="feedback-score">${entry.freshness}<small>/ 5</small></div>
-    <div><b>${entry.date} · ${freshnessLabels[entry.freshness - 1]}</b><span>${entry.actualSleep} 취침 → ${entry.actualWake} 기상</span></div>
+    <div><b>${entry.date} · ${freshnessLabels[entry.freshness - 1]}</b><span>${displayTime(entry.actualSleep)} 취침 → ${displayTime(entry.actualWake)} 기상</span></div>
     <span class="soft-chip">낮 졸림 ${entry.sleepiness}</span>
   </article>`;
 }
@@ -403,10 +507,11 @@ function feedbackCard(entry) {
 function renderFeedback() {
   const impact = feedbackAdjustment(state.feedback);
   const plan = getPlans()[0];
+  const cameFromAlarm = state.sleepSession.status === "checking";
   return `
     <section class="page-heading compact-heading">
       <div><span class="section-kicker">MORNING CHECK</span><h1>어젯밤은 어땠나요?</h1><p>30초 피드백이 다음 수면 계획을 더 현실적으로 만들어요.</p></div>
-      <span class="live-chip calm"><i></i> 상세 수면 기록은 나에게만 보여요</span>
+      <span class="live-chip calm"><i></i> ${cameFromAlarm ? "알람이 꺼졌어요 · 기상 체크를 완료해 주세요" : "상세 수면 기록은 나에게만 보여요"}</span>
     </section>
     <div class="feedback-layout">
       <section class="card form-card feedback-form-card">
@@ -433,6 +538,104 @@ function renderFeedback() {
         </section>
       </div>
     </div>`;
+}
+
+function renderSleepMode() {
+  const plan = getPlans()[0];
+  const selected = state.selectedCharacter ?? "owl";
+  const now = new Date();
+  const nowValue = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  return `<main class="device-stage sleep-stage">
+    <section class="lockscreen-preview" aria-label="iPhone 잠금화면 Live Activity 미리보기">
+      <div class="dynamic-island" aria-hidden="true"></div>
+      <div class="lockscreen-date">${formatKoreanDate(now)}</div>
+      <div class="lockscreen-time">${displayTime(nowValue)}</div>
+      <div class="lockscreen-space"></div>
+      <article class="live-activity-card">
+        <div class="live-activity-top"><span><i></i> 수면 중</span><small>밤가이 Live Activity</small></div>
+        <div class="live-activity-body">
+          ${characterArtwork(selected, "live-character-art")}
+          <div><small>예정 기상</small><strong>${displayTime(plan.wakeTime)}</strong><p>${CHARACTER_OPTIONS[selected].name}가 조용히 곁을 지키고 있어요.</p></div>
+        </div>
+        <div class="live-progress"><span style="width:42%"></span></div>
+        <div class="live-activity-bottom"><span>수면 계획 진행 중</span><b>${formatDuration(plan.sleepMinutes)} 목표</b></div>
+      </article>
+      <div class="lockscreen-actions">
+        <button class="ghost-button dark" data-action="end-sleep">수면 종료</button>
+        <button class="primary-button light" data-action="preview-alarm">기상 알람 미리보기 ${icon("arrow")}</button>
+      </div>
+      <small class="prototype-note">웹에서는 잠금화면 경험을 시뮬레이션합니다. 실제 앱은 ActivityKit·WidgetKit으로 연결합니다.</small>
+    </section>
+  </main>`;
+}
+
+function renderAlarm() {
+  const plan = getPlans()[0];
+  const selected = state.selectedCharacter ?? "owl";
+  return `<main class="alarm-screen">
+    <div class="alarm-glow" aria-hidden="true"></div>
+    <header><span class="brand-mark">${icon("moon")}</span><b>밤가이 기상 알람</b></header>
+    <section class="alarm-content">
+      <span class="alarm-label">GOOD MORNING</span>
+      <h1>기상하셨네요<br>${escapeHtml(state.profile.name)}님.</h1>
+      <p>${displayTime(plan.wakeTime)} · 오늘의 첫 약속을 준비할 시간이에요.</p>
+      ${characterArtwork(selected, "alarm-character-art")}
+      <div class="alarm-character-copy">${CHARACTER_OPTIONS[selected].name}도 함께 일어났어요.</div>
+    </section>
+    <button class="alarm-dismiss" data-action="dismiss-alarm">${icon("bell")} 알람 끄기</button>
+    <small class="alarm-footnote">알람을 끄면 바로 기상 체크가 이어집니다.</small>
+  </main>`;
+}
+
+function renderCommunity() {
+  const joined = new Set(state.community.joinedChallenges);
+  return `<section class="community-page">
+    <section class="page-heading compact-heading community-heading">
+      <div><span class="section-kicker">COMMUNITY</span><h1>같이 자는 약속은, 조금 더 지키기 쉬워요.</h1><p>게시판에서 친구를 만나고 우리만의 취침팟과 도전을 만들어 보세요.</p></div>
+      <div class="reward-wallet">${icon("gift")}<span><small>꾸미기 포인트</small><b>${state.community.points} P</b></span></div>
+    </section>
+
+    <section class="community-streak-card">
+      <div><span>서울대 멋사 낮밤바꾸기 취침팟</span><h2>모두 함께 ${state.community.groupStreak}일째</h2><p>오늘은 8명 중 6명이 수면 준비를 완료했어요.</p></div>
+      <div class="streak-orbit">${characterArtwork(state.selectedCharacter ?? "owl", "streak-character-art")}<b>${state.community.groupStreak}</b><small>DAYS</small></div>
+    </section>
+
+    <div class="community-grid">
+      <section class="card board-card">
+        <div class="card-heading"><div><span class="card-kicker">BOARD</span><h3>커뮤니티 게시판</h3></div><button class="ghost-button compact" data-action="create-community">친구 모집하기</button></div>
+        <div class="board-tabs"><button class="is-active">최신글</button><button>인기글</button><button>모집글</button></div>
+        <div class="post-list">${COMMUNITY_POSTS.map((post) => `<article class="post-card"><span>${post.type}</span><div><h4>${post.title}</h4><p>${post.copy}</p><small>${post.meta}</small></div><button class="icon-button bordered" aria-label="글 보기">${icon("arrow")}</button></article>`).join("")}</div>
+      </section>
+
+      <section class="card challenge-list-card">
+        <div class="card-heading"><div><span class="card-kicker">CHALLENGES</span><h3>진행 중인 도전</h3></div><span class="soft-chip accent">개강 시즌</span></div>
+        <div class="challenge-list">${CHALLENGES.map((challenge) => `<article class="challenge-card">
+          <div class="challenge-title"><span>${icon("moon")}</span><div><h4>${challenge.title}</h4><p>${challenge.goal}</p></div></div>
+          <div class="challenge-progress"><span style="width:${challenge.progress}%"></span></div>
+          <div class="challenge-meta"><span>${challenge.people}명 함께 도전</span><b>+${challenge.reward} P</b></div>
+          <button class="${joined.has(challenge.id) ? "joined" : ""}" data-action="toggle-challenge" data-challenge="${challenge.id}">${joined.has(challenge.id) ? `${icon("check")} 참여 중` : "도전 참여하기"}</button>
+        </article>`).join("")}</div>
+      </section>
+    </div>
+
+    <section class="card dressing-preview">
+      <div><span class="card-kicker">REWARDS</span><h3>잘 잔 만큼 밤가이의 방이 포근해져요.</h3><p>기상 체크와 공동 도전을 완료해 시즌 의상, 액세서리, 방 배경을 모아 보세요.</p><button class="primary-button" data-action="open-dressing">꾸미기 미리보기</button></div>
+      <div class="reward-items"><span>개강 달 쿠션<small>보유</small></span><span>별빛 안대<small>80 P</small></span><span>구름 침대<small>120 P</small></span></div>
+      ${characterArtwork(state.selectedCharacter ?? "owl", "dressing-character-art")}
+    </section>
+  </section>`;
+}
+
+function calendarConnectionRow(provider, label, description) {
+  const connection = state.calendarConnections[provider];
+  const syncLabel = connection.lastSyncedAt
+    ? new Date(connection.lastSyncedAt).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })
+    : "동기화 전";
+  return `<div class="calendar-setting-row">
+    <span class="calendar-logo ${provider}">${provider === "apple" ? "A" : "G"}</span>
+    <span><b>${label}</b><small>${connection.connected ? `연결됨 · ${syncLabel}` : description}</small></span>
+    <button class="ghost-button compact" data-action="toggle-calendar" data-provider="${provider}">${connection.connected ? "연결 해제" : "연결"}</button>
+  </div>`;
 }
 
 function renderRhythm() {
@@ -470,11 +673,30 @@ function renderRhythm() {
         <div class="policy-impact">${icon("spark")} <span><b>현재 적용값</b>${impact.reason ?? "피드백이 없어 기본 목표를 사용 중이에요."}</span></div>
       </section>
     </div>
+    <section class="settings-grid">
+      <section class="card settings-card">
+        <div class="card-heading"><div><span class="card-kicker">TIME FORMAT</span><h3>시간 표시 설정</h3></div><span class="soft-chip">앱 전체 적용</span></div>
+        <div class="segmented settings-segmented">
+          <button class="${state.settings.timeFormat === "24h" ? "is-active" : ""}" data-action="set-time-format" data-format="24h"><b>24시간제</b><small>23:30</small></button>
+          <button class="${state.settings.timeFormat === "12h" ? "is-active" : ""}" data-action="set-time-format" data-format="12h"><b>12시간제</b><small>오후 11:30</small></button>
+        </div>
+        <p>메인, 일정, 알람, 잠금화면 Live Activity의 시간이 함께 바뀝니다.</p>
+      </section>
+      <section class="card calendar-settings-card">
+        <div class="card-heading"><div><span class="card-kicker">CALENDAR</span><h3>선택 캘린더 연결</h3></div><button class="icon-button bordered" data-action="sync-calendars" aria-label="캘린더 다시 동기화">${icon("refresh")}</button></div>
+        <div class="calendar-setting-list">
+          ${calendarConnectionRow("apple", "Apple Calendar", "iPhone 일정과 연결")}
+          ${calendarConnectionRow("google", "Google Calendar", "학교·개인 일정과 연결")}
+        </div>
+        <div class="shortcut-card"><span>${icon("spark")}</span><div><b>iPhone 단축어 자동화</b><p>캘린더가 바뀌면 밤가이를 열어 계획을 갱신하도록 개인 자동화를 설정할 수 있어요.</p></div><button data-action="shortcut-guide">설정 안내</button></div>
+        <small class="prototype-inline-note">웹 데모는 연결·동기화 상태를 시뮬레이션하며 실제 권한은 요청하지 않습니다.</small>
+      </section>
+    </section>
     <section class="card plan-table-card">
       <div class="card-heading"><div><span class="card-kicker">WEEKLY PLAN</span><h3>7일 수면 계획</h3></div><span class="soft-chip">일정 변경 시 즉시 반영</span></div>
       <div class="plan-table">
         <div class="plan-row header"><span>기상일</span><span>첫 일정</span><span>취침 준비</span><span>불 끄기 구간</span><span>기상</span></div>
-        ${plans.map((plan, index) => `<div class="plan-row ${index === 0 ? "highlight" : ""}"><span><b>${shortDate(plan.date)}</b>${index === 0 ? "<small>다음 계획</small>" : ""}</span><span>${escapeHtml(plan.primarySchedule ? `${plan.primarySchedule.startTime} ${plan.primarySchedule.title}` : "등록 일정 없음")}</span><span>${plan.routineStart}</span><span><b>${plan.bedtimeWindowStart}–${plan.bedtimeWindowEnd}</b></span><span>${plan.wakeTime}</span></div>`).join("")}
+        ${plans.map((plan, index) => `<div class="plan-row ${index === 0 ? "highlight" : ""}"><span><b>${shortDate(plan.date)}</b>${index === 0 ? "<small>다음 계획</small>" : ""}</span><span>${escapeHtml(plan.primarySchedule ? `${displayTime(plan.primarySchedule.startTime)} ${plan.primarySchedule.title}` : "등록 일정 없음")}</span><span>${displayTime(plan.routineStart)}</span><span><b>${displayTime(plan.bedtimeWindowStart)}–${displayTime(plan.bedtimeWindowEnd)}</b></span><span>${displayTime(plan.wakeTime)}</span></div>`).join("")}
       </div>
     </section>`;
 }
@@ -484,10 +706,23 @@ function render() {
     app.innerHTML = renderCharacterOnboarding();
     return;
   }
+  if (!state.onboardingComplete) {
+    app.innerHTML = renderRhythmOnboarding();
+    return;
+  }
+  if (ui.view === "sleep") {
+    app.innerHTML = renderSleepMode();
+    return;
+  }
+  if (ui.view === "alarm") {
+    app.innerHTML = renderAlarm();
+    return;
+  }
   const views = {
     today: renderToday,
     schedule: renderSchedule,
     feedback: renderFeedback,
+    community: renderCommunity,
     rhythm: renderRhythm,
   };
   app.innerHTML = shell((views[ui.view] ?? renderToday)());
@@ -526,8 +761,8 @@ document.addEventListener("click", (event) => {
   if (action === "confirm-character" && CHARACTER_OPTIONS[ui.characterDraft]) {
     state.selectedCharacter = ui.characterDraft;
     persist();
-    ui.view = "today";
-    toast(`${CHARACTER_OPTIONS[state.selectedCharacter].name}가 도경님의 수면 메이트가 되었어요.`);
+    ui.view = state.onboardingComplete ? "today" : "rhythm-onboarding";
+    render();
   }
 
   if (action === "change-character") {
@@ -546,6 +781,105 @@ document.addEventListener("click", (event) => {
     state.savedPlanDate = getPlans()[0].targetDate;
     persist();
     toast("오늘의 수면 계획을 저장했어요.");
+  }
+
+  if (action === "adjust-lights-out") {
+    const plan = getPlans()[0];
+    const current = Number(state.planOverrides[plan.targetDate] ?? 0);
+    const next = Math.min(120, Math.max(-120, current + Number(actionButton.dataset.delta)));
+    state.planOverrides[plan.targetDate] = next;
+    state.savedPlanDate = null;
+    persist();
+    render();
+  }
+
+  if (action === "start-sleep") {
+    const plan = getPlans()[0];
+    state.savedPlanDate = plan.targetDate;
+    state.sleepSession = {
+      status: "sleeping",
+      startedAt: new Date().toISOString(),
+      dismissedAt: null,
+      targetDate: plan.targetDate,
+    };
+    ui.view = "sleep";
+    persist();
+    render();
+  }
+
+  if (action === "preview-alarm") {
+    state.sleepSession.status = "alarm";
+    ui.view = "alarm";
+    persist();
+    render();
+  }
+
+  if (action === "end-sleep") {
+    state.sleepSession.status = "idle";
+    ui.view = "today";
+    persist();
+    toast("수면 세션을 종료했어요.");
+  }
+
+  if (action === "dismiss-alarm") {
+    state.sleepSession.status = "checking";
+    state.sleepSession.dismissedAt = new Date().toISOString();
+    ui.view = "feedback";
+    persist();
+    render();
+  }
+
+  if (action === "set-time-format") {
+    state.settings.timeFormat = actionButton.dataset.format === "12h" ? "12h" : "24h";
+    persist();
+    render();
+  }
+
+  if (action === "toggle-calendar") {
+    const provider = actionButton.dataset.provider;
+    const connection = state.calendarConnections[provider];
+    if (connection) {
+      connection.connected = !connection.connected;
+      connection.lastSyncedAt = connection.connected ? new Date().toISOString() : null;
+      state.savedPlanDate = null;
+      persist();
+      toast(`${provider === "apple" ? "Apple" : "Google"} Calendar ${connection.connected ? "연결 상태를 저장했어요." : "연결을 해제했어요."}`);
+    }
+  }
+
+  if (action === "sync-calendars") {
+    const active = Object.values(state.calendarConnections).filter((connection) => connection.connected);
+    if (!active.length) {
+      toast("먼저 연결할 캘린더를 선택해 주세요.");
+    } else {
+      const syncedAt = new Date().toISOString();
+      active.forEach((connection) => { connection.lastSyncedAt = syncedAt; });
+      state.savedPlanDate = null;
+      persist();
+      toast("변경된 일정을 확인하고 수면 계획을 다시 계산했어요.");
+    }
+  }
+
+  if (action === "shortcut-guide") {
+    toast("iPhone 단축어 → 자동화 → 앱 열기에서 밤가이를 선택하는 흐름으로 연결할 예정이에요.");
+  }
+
+  if (action === "toggle-challenge") {
+    const challengeId = actionButton.dataset.challenge;
+    const joined = new Set(state.community.joinedChallenges);
+    if (joined.has(challengeId)) joined.delete(challengeId);
+    else joined.add(challengeId);
+    state.community.joinedChallenges = [...joined];
+    persist();
+    toast(joined.has(challengeId) ? "도전에 참여했어요. 오늘 수면 기록부터 함께 채워요." : "도전 참여를 취소했어요.");
+  }
+
+  if (action === "create-community") {
+    toast("친구 초대와 커뮤니티 생성은 다음 서버 연동 단계에서 열려요.");
+  }
+
+  if (action === "open-dressing") {
+    toast(`현재 ${state.community.points}P를 보유하고 있어요. 꾸미기 저장은 다음 단계에서 연결해요.`);
   }
 
   if (action === "toggle-alert") {
@@ -601,6 +935,29 @@ document.addEventListener("submit", (event) => {
   const form = event.target;
   const data = new FormData(form);
 
+  if (form.id === "onboarding-form") {
+    const providers = new Set(data.getAll("calendarProvider").map(String));
+    const syncedAt = new Date().toISOString();
+    state.profile = {
+      ...state.profile,
+      targetWake: String(data.get("targetWake")),
+      targetSleepMinutes: Number(data.get("targetSleepMinutes")),
+    };
+    state.settings.timeFormat = data.get("timeFormat") === "12h" ? "12h" : "24h";
+    Object.keys(state.calendarConnections).forEach((provider) => {
+      const connected = providers.has(provider);
+      state.calendarConnections[provider] = {
+        connected,
+        lastSyncedAt: connected ? syncedAt : null,
+      };
+    });
+    state.onboardingComplete = true;
+    ui.view = "today";
+    persist();
+    toast(`${CHARACTER_OPTIONS[state.selectedCharacter].name}와 도경님의 첫 수면 계획을 만들었어요.`);
+    return;
+  }
+
   if (form.id === "schedule-form") {
     const kind = form.dataset.kind;
     const days = data.getAll("days").map(Number);
@@ -637,8 +994,16 @@ document.addEventListener("submit", (event) => {
     };
     state.feedback = state.feedback.filter((item) => item.date !== entry.date);
     state.feedback.push(entry);
+    const completedAlarmFlow = state.sleepSession.status === "checking";
+    if (completedAlarmFlow) {
+      state.sleepSession.status = "complete";
+      state.community.points += 10;
+      ui.view = "today";
+    }
     persist();
-    toast("피드백을 저장하고 다음 수면 계획을 조정했어요.");
+    toast(completedAlarmFlow
+      ? "기상 체크 완료 · 꾸미기 포인트 10P를 받았어요."
+      : "피드백을 저장하고 다음 수면 계획을 조정했어요.");
   }
 
   if (form.id === "profile-form") {

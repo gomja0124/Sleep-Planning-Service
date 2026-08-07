@@ -26,6 +26,18 @@ export function formatTime(totalMinutes) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+export function formatDisplayTime(value, timeFormat = "24h") {
+  const totalMinutes = typeof value === "number" ? value : parseTime(value);
+  const normalized = ((Math.round(totalMinutes) % MINUTES_IN_DAY) + MINUTES_IN_DAY) % MINUTES_IN_DAY;
+  if (timeFormat !== "12h") return formatTime(normalized);
+
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  const period = hours < 12 ? "오전" : "오후";
+  const displayHours = hours % 12 || 12;
+  return `${period} ${displayHours}:${String(minutes).padStart(2, "0")}`;
+}
+
 export function formatDuration(totalMinutes) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -155,6 +167,28 @@ export function calculateRecommendation({ profile, schedules = [], feedback = []
       { type: "lights-out", label: "불 끄기", time: formatTime(bedtimeWindowStart) },
       { type: "wake", label: "기상", time: formatTime(wakeMinutes) },
     ],
+  };
+}
+
+export function applyPlanOffset(plan, requestedOffsetMinutes = 0) {
+  const offsetMinutes = clamp(Math.round(Number(requestedOffsetMinutes) / 5) * 5 || 0, -120, 120);
+  if (!offsetMinutes) {
+    return { ...plan, userOffsetMinutes: 0, effectiveSleepMinutes: plan.sleepMinutes };
+  }
+
+  const shift = (value) => formatTime(parseTime(value) + offsetMinutes);
+  return {
+    ...plan,
+    bedtimeWindowStart: shift(plan.bedtimeWindowStart),
+    bedtimeWindowEnd: shift(plan.bedtimeWindowEnd),
+    bedtimeCenter: shift(plan.bedtimeCenter),
+    routineStart: shift(plan.routineStart),
+    sleepMinutes: Math.max(0, plan.sleepMinutes - offsetMinutes),
+    effectiveSleepMinutes: Math.max(0, plan.sleepMinutes - offsetMinutes),
+    userOffsetMinutes: offsetMinutes,
+    alerts: plan.alerts.map((alert) => (
+      alert.type === "wake" ? { ...alert } : { ...alert, time: shift(alert.time) }
+    )),
   };
 }
 
