@@ -62,6 +62,20 @@ test("첫 일정의 준비·통학 시간을 반영해 기상과 취침 구간�
   assert.match(result.reasons[0], /팀 회의/);
 });
 
+test("권장 불 끄기 시각은 5분 눈금으로 제안한다", () => {
+  const result = calculateRecommendation({
+    profile: { ...profile, latencyMinutes: 24 },
+    targetDate: new Date(2026, 7, 7, 12),
+  });
+
+  assert.equal(result.bedtimeCenter, "23:35");
+  assert.equal(result.bedtimeWindowStart, "23:20");
+  assert.equal(result.bedtimeWindowEnd, "23:50");
+  for (const value of [result.bedtimeCenter, result.bedtimeWindowStart, result.bedtimeWindowEnd]) {
+    assert.equal(Number(value.slice(-2)) % 5, 0);
+  }
+});
+
 test("일정이 늦으면 사용자의 희망 기상 시각을 유지한다", () => {
   const result = calculateRecommendation({
     profile,
@@ -99,18 +113,18 @@ test("최근 컨디션이 나쁘면 다음 추천의 수면 여유를 늘린다"
   assert.equal(result.bedtimeCenter, "23:10");
 });
 
-test("불 끄기 계획을 5분 단위로 조절하고 기상 시각은 유지한다", () => {
+test("추천 후 불 끄기 계획은 1분 단위로 조절하고 기상 시각은 유지한다", () => {
   const base = calculateRecommendation({
     profile,
     targetDate: new Date(2026, 7, 7, 12),
   });
   const later = applyPlanOffset(base, 7);
 
-  assert.equal(later.userOffsetMinutes, 5);
-  assert.equal(later.bedtimeCenter, "23:45");
-  assert.equal(later.routineStart, "23:00");
+  assert.equal(later.userOffsetMinutes, 7);
+  assert.equal(later.bedtimeCenter, "23:47");
+  assert.equal(later.routineStart, "23:02");
   assert.equal(later.wakeTime, base.wakeTime);
-  assert.equal(later.sleepMinutes, base.sleepMinutes - 5);
+  assert.equal(later.sleepMinutes, base.sleepMinutes - 7);
   assert.equal(later.alerts.find((alert) => alert.type === "wake").time, base.wakeTime);
 });
 

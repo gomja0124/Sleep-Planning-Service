@@ -362,13 +362,13 @@ function renderToday() {
     <section class="hero-card">
       <div class="hero-copy">
         <span class="hero-label">${icon("spark")} ${formatKoreanDate(plan.date)} 계획</span>
-        <p class="hero-caption">권장 불 끄기 구간</p>
+        <p class="hero-caption">권장 불 끄기 구간 · 5분 눈금으로 제안</p>
         <h2>${displayTime(plan.bedtimeWindowStart)}<span>—</span>${displayTime(plan.bedtimeWindowEnd)}</h2>
         <p class="hero-sub">${displayTime(plan.wakeTime)} 기상 · ${formatDuration(plan.sleepMinutes)} 확보 예상</p>
-        <div class="time-stepper" aria-label="불 끄기 시각 5분 단위 조절">
-          <button data-action="adjust-lights-out" data-delta="-5" aria-label="불 끄기 시각 5분 당기기">${icon("minus")}<span>5분</span></button>
-          <strong><small>불 끄기 조절</small>${offsetLabel}</strong>
-          <button data-action="adjust-lights-out" data-delta="5" aria-label="불 끄기 시각 5분 미루기"><span>5분</span>${icon("plus")}</button>
+        <div class="time-stepper" aria-label="불 끄기 시각 1분 단위 조절">
+          <button data-action="adjust-lights-out" data-delta="-1" aria-label="불 끄기 시각 1분 당기기">${icon("minus")}<span>1분</span></button>
+          <strong><small>1분씩 직접 조절</small>${offsetLabel}</strong>
+          <button data-action="adjust-lights-out" data-delta="1" aria-label="불 끄기 시각 1분 미루기"><span>1분</span>${icon("plus")}</button>
         </div>
         <div class="hero-actions">
           <button class="primary-button light" data-action="start-sleep">${icon("moon")} 수면 시작</button>

@@ -1,4 +1,5 @@
 const MINUTES_IN_DAY = 24 * 60;
+const RECOMMENDATION_STEP_MINUTES = 5;
 
 export const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -127,7 +128,9 @@ export function calculateRecommendation({ profile, schedules = [], feedback = []
   const sleepMinutes = baseSleep + adjustment.minutes;
   const latencyMinutes = clamp(Number(profile.latencyMinutes) || 0, 0, 120);
   const routineMinutes = clamp(Number(profile.routineMinutes) || 30, 0, 180);
-  const bedtimeCenter = wakeMinutes - sleepMinutes - latencyMinutes;
+  const calculatedBedtimeCenter = wakeMinutes - sleepMinutes - latencyMinutes;
+  const bedtimeCenter = Math.round(calculatedBedtimeCenter / RECOMMENDATION_STEP_MINUTES)
+    * RECOMMENDATION_STEP_MINUTES;
   const bedtimeWindowStart = bedtimeCenter - 15;
   const bedtimeWindowEnd = bedtimeCenter + 15;
   const routineStart = bedtimeWindowStart - routineMinutes;
@@ -171,7 +174,7 @@ export function calculateRecommendation({ profile, schedules = [], feedback = []
 }
 
 export function applyPlanOffset(plan, requestedOffsetMinutes = 0) {
-  const offsetMinutes = clamp(Math.round(Number(requestedOffsetMinutes) / 5) * 5 || 0, -120, 120);
+  const offsetMinutes = clamp(Math.round(Number(requestedOffsetMinutes)) || 0, -120, 120);
   if (!offsetMinutes) {
     return { ...plan, userOffsetMinutes: 0, effectiveSleepMinutes: plan.sleepMinutes };
   }
