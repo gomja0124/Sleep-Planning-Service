@@ -25,6 +25,10 @@ const initial = {
   feedback: [],
   activeSession: null,
   backendConnected: false,
+  authResolved: false,
+  authenticated: false,
+  authMode: "welcome",
+  socialProviders: { google: false, apple: false },
   calendarConnections: {
     apple: { connected: false, syncMode: "manual", lastSyncedAt: null },
     google: { connected: false, syncMode: "manual", lastSyncedAt: null },
@@ -38,6 +42,8 @@ function loadLocalState() {
 
 let state = { ...initial, ...loadLocalState() };
 state.checkin = { ...initial.checkin, ...state.checkin };
+state.authResolved = false;
+state.authenticated = false;
 state.calendarConnections = {
   apple: { ...initial.calendarConnections.apple, ...state.calendarConnections?.apple },
   google: { ...initial.calendarConnections.google, ...state.calendarConnections?.google },
@@ -119,6 +125,27 @@ function applyProfile(data) {
   }
 }
 
+function resetSignedOutState() {
+  state.authMode = "welcome";
+  state.onboarding = false;
+  state.step = 0;
+  state.companion = initial.companion;
+  state.name = initial.name;
+  state.bedtime = initial.bedtime;
+  state.wake = initial.wake;
+  state.screen = "home";
+  state.routine = { ...initial.routine };
+  state.pendingFeedback = null;
+  state.pendingSleepStart = false;
+  state.plan = null;
+  state.feedback = [];
+  state.activeSession = null;
+  state.calendarConnections = {
+    apple: { ...initial.calendarConnections.apple },
+    google: { ...initial.calendarConnections.google },
+  };
+}
+
 async function refreshPlan() {
   const data = await api.plans(tomorrowKey(), 7);
   state.plan = data.results?.[0] ?? null;
@@ -130,6 +157,9 @@ async function loadBackend() {
     const profile = await api.me();
     applyProfile(profile);
     state.backendConnected = true;
+    state.authenticated = true;
+    state.authResolved = true;
+    if (!state.onboarding) state.step = 0;
     if (state.onboarding) {
       const [plans, sessions, feedback] = await Promise.all([
         api.plans(tomorrowKey(), 7),
@@ -146,11 +176,19 @@ async function loadBackend() {
     render();
     await syncCalendars("auto", { quiet: true });
   } catch (error) {
+    resetSignedOutState();
     state.backendConnected = false;
+    state.authenticated = false;
+    state.authResolved = true;
+    try {
+      const auth = await api.authStatus();
+      state.socialProviders = { ...state.socialProviders, ...auth.providers };
+    } catch { /* The email login UI remains available if status lookup fails. */ }
+    render();
     if (error.status === 401 && error.loginUrl) {
       showToast("로그인하면 수면 기록을 안전하게 저장할 수 있어요.");
     } else {
-      showToast("서버 연결 전이라 이 기기에서 데모로 실행 중이에요.");
+      showToast("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
   }
 }
@@ -166,6 +204,14 @@ function shell(content) {
   const tabs = [["home", "home", "홈"], ["routine", "routine", "루틴"], ["report", "report", "리포트"], ["settings", "settings", "설정"]];
   return `<main class="phone" aria-label="Somni 수면 앱"><div class="safe-top"><span>9:41</span><span>${state.backendConnected ? "● SYNC" : "● DEMO"}</span></div>${content}
     <nav class="tabbar" aria-label="메인 메뉴">${tabs.map(([id, i, label]) => `<button data-screen="${id}" class="${state.screen === id ? "active" : ""}"><i>${icon(i)}</i><span>${label}</span></button>`).join("")}</nav></main>`;
+}
+
+function authScreen() {
+  if (state.authMode === "login" || state.authMode === "signup") {
+    const signup = state.authMode === "signup";
+    return `<main class="auth-screen"><div class="auth-stars"></div><button class="auth-back" data-auth-mode="welcome">${icon("back")}</button><section class="auth-copy"><span class="auth-logo">S</span><span class="eyebrow">SOMNI ACCOUNT</span><h1>${signup ? "처음 만났네요.\n함께 밤을 준비해요." : "다시 만나서\n반가워요."}</h1><p>${signup ? "계정을 만들면 수면 기록과 캘린더가 안전하게 동기화돼요." : "내 수면 리듬을 이어서 기록해 볼까요?"}</p></section><form class="auth-form" data-auth-form="${state.authMode}">${signup ? `<label>이름<input name="name" autocomplete="name" required maxlength="40" placeholder="이름"></label>` : ""}<label>이메일<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label><label>비밀번호<input name="password" type="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="8" required placeholder="8자 이상"></label><button class="primary" type="submit">${signup ? "회원가입하고 시작하기" : "로그인"} ${icon("arrow")}</button></form><button class="auth-switch" data-auth-mode="${signup ? "login" : "signup"}">${signup ? "이미 계정이 있나요? 로그인" : "처음이신가요? 회원가입"}</button></main>`;
+  }
+  return `<main class="auth-screen auth-welcome"><div class="auth-stars"></div><section class="auth-copy"><span class="auth-logo">S</span><span class="eyebrow">SOMNI</span><h1>나만의 밤을\n시작해 볼까요?</h1><p>계정을 만들면 수면 기록과 일정을\n어떤 기기에서든 이어갈 수 있어요.</p></section><section class="auth-actions"><button class="primary" data-auth-mode="signup">회원가입 ${icon("arrow")}</button><button class="auth-secondary" data-auth-mode="login">이미 계정이 있어요</button><div class="auth-divider"><span>또는</span></div><button class="social-login google" data-social-login="google" ${state.socialProviders.google ? "" : "disabled"}><b>G</b> Google로 ${state.socialProviders.google ? "계속하기" : "준비 중"}</button><button class="social-login apple" data-social-login="apple" ${state.socialProviders.apple ? "" : "disabled"}><b>●</b> Apple로 ${state.socialProviders.apple ? "계속하기" : "준비 중"}</button></section></main>`;
 }
 
 function onboarding() {
@@ -224,7 +270,7 @@ function daytimeCheckin() {
 
 function settings() {
   const c = companions[state.companion];
-  return shell(`<section class="page settings-page"><header><span class="eyebrow">SETTINGS</span><h1>내 밤의 설정</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>${c.ko}와 함께하는 밤</b><p>${state.backendConnected ? "계정에 안전하게 동기화 중" : c.label}</p></div><button data-reset-companion>변경</button></section><section class="setting-group"><span>수면 목표</span><button><b>권장 취침 시간</b><em>${state.bedtime}</em></button><button><b>기상 시간</b><em>${state.wake}</em></button></section><section class="setting-group calendar-group"><span>캘린더 동기화</span>${calendarSetting("apple", "Apple Calendar", "iPhone 일정")}${calendarSetting("google", "Google Calendar", "학교·개인 일정")}<button class="calendar-sync-button" data-sync-calendars><b>${icon("refresh")} 지금 동기화</b><em>변경 일정 확인</em></button><p class="calendar-help">자동 모드는 앱을 열거나 다시 돌아올 때 변경된 일정을 확인해 수면 계획에 반영해요.</p></section><section class="setting-group"><span>알림</span><button><b>취침 루틴 알림</b><em class="toggle on"></em></button><button><b>기상 알림</b><em class="toggle on"></em></button></section><section class="setting-group"><span>계정</span>${state.backendConnected ? `<button><b>서버 동기화</b><em>연결됨</em></button>` : `<button data-login><b>Google·Apple 로그인</b><em>${icon("arrow")}</em></button>`}</section></section>`);
+  return shell(`<section class="page settings-page"><header><span class="eyebrow">SETTINGS</span><h1>내 밤의 설정</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>${c.ko}와 함께하는 밤</b><p>${state.backendConnected ? "계정에 안전하게 동기화 중" : c.label}</p></div><button data-reset-companion>변경</button></section><section class="setting-group"><span>수면 목표</span><button><b>권장 취침 시간</b><em>${state.bedtime}</em></button><button><b>기상 시간</b><em>${state.wake}</em></button></section><section class="setting-group calendar-group"><span>캘린더 동기화</span>${calendarSetting("apple", "Apple Calendar", "iPhone 일정")}${calendarSetting("google", "Google Calendar", "학교·개인 일정")}<button class="calendar-sync-button" data-sync-calendars><b>${icon("refresh")} 지금 동기화</b><em>변경 일정 확인</em></button><p class="calendar-help">자동 모드는 앱을 열거나 다시 돌아올 때 변경된 일정을 확인해 수면 계획에 반영해요.</p></section><section class="setting-group"><span>알림</span><button><b>취침 루틴 알림</b><em class="toggle on"></em></button><button><b>기상 알림</b><em class="toggle on"></em></button></section><section class="setting-group"><span>계정</span><button><b>서버 동기화</b><em>연결됨</em></button><button data-logout><b>로그아웃</b><em>${icon("arrow")}</em></button></section></section>`);
 }
 
 function calendarSetting(provider, label, description) {
@@ -276,7 +322,9 @@ function sleep() {
 }
 
 function render() {
-  if (!state.onboarding) onboarding();
+  if (!state.authResolved) app.innerHTML = `<main class="auth-screen auth-loading"><span class="auth-logo">S</span><p>내 리듬을 불러오는 중…</p></main>`;
+  else if (!state.authenticated) app.innerHTML = authScreen();
+  else if (!state.onboarding) onboarding();
   else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, report, settings, checkin, "daytime-checkin": daytimeCheckin }[state.screen] || home)();
 }
 
@@ -373,6 +421,7 @@ async function saveDaytime() {
 app.addEventListener("click", async (event) => {
   const button = event.target.closest("button");
   if (!button) return;
+  if (button.type === "submit" && button.closest("[data-auth-form]")) return;
   button.disabled = true;
   try {
     if (button.dataset.next !== undefined) state.step += 1;
@@ -382,6 +431,16 @@ app.addEventListener("click", async (event) => {
     else if (button.dataset.endSleep !== undefined) await endSleep();
     else if (button.dataset.saveMorning !== undefined) saveMorning();
     else if (button.dataset.saveDaytime !== undefined) await saveDaytime();
+    else if (button.dataset.authMode) state.authMode = button.dataset.authMode;
+    else if (button.dataset.socialLogin) {
+      location.href = `${api.loginUrl}?provider=${button.dataset.socialLogin}`;
+      return;
+    } else if (button.dataset.logout !== undefined) {
+      await api.logout();
+      localStorage.removeItem(storeKey);
+      location.reload();
+      return;
+    }
     else if (button.dataset.syncCalendars !== undefined) await syncCalendars("manual");
     else if (button.dataset.calendarConnect) {
       const provider = button.dataset.calendarConnect;
@@ -412,6 +471,28 @@ app.addEventListener("click", async (event) => {
     if (error.status === 401 && error.loginUrl) location.href = error.loginUrl;
     else showToast(error.message);
     button.disabled = false;
+  }
+});
+
+app.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-auth-form]");
+  if (!form) return;
+  event.preventDefault();
+  const submit = form.querySelector("button[type=submit]");
+  submit.disabled = true;
+  try {
+    const values = Object.fromEntries(new FormData(form));
+    const response = form.dataset.authForm === "signup" ? await api.signup(values) : await api.login(values);
+    applyProfile(response.profile);
+    if (!state.onboarding) state.step = 0;
+    state.authenticated = true;
+    state.authResolved = true;
+    state.backendConnected = true;
+    persist();
+    render();
+  } catch (error) {
+    showToast(error.message);
+    submit.disabled = false;
   }
 });
 

@@ -1,17 +1,25 @@
 from django.conf import settings
-from django.contrib.auth import get_user_model, login
+from django.contrib.auth import get_user_model, login, logout
 from django.http import JsonResponse
 
 
 class ApiLoginRequiredMiddleware:
     """Protect private API endpoints with the social-login session."""
 
-    public_paths = {"/api/v1/health/"}
+    public_paths = {
+        "/api/v1/health/",
+        "/api/v1/csrf/",
+        "/api/v1/auth/status/",
+        "/api/v1/auth/signup/",
+        "/api/v1/auth/login/",
+    }
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        if request.user.is_authenticated and request.user.username == "demo-user" and not settings.ALLOW_DEMO_USER:
+            logout(request)
         if request.path.startswith("/api/v1/") and request.path not in self.public_paths:
             if not request.user.is_authenticated:
                 if settings.ALLOW_DEMO_USER:

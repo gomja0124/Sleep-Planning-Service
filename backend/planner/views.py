@@ -2,8 +2,10 @@ import json
 from datetime import date, timedelta
 
 from django.conf import settings
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
@@ -65,6 +67,62 @@ def health(request):
 @require_http_methods(["GET"])
 def csrf(request):
     return JsonResponse({"status": "ok"})
+
+
+@require_http_methods(["GET"])
+def api_auth_status(request):
+    if not request.user.is_authenticated:
+        return JsonResponse({"authenticated": False, "providers": settings.SOCIAL_LOGIN_CONFIGURED})
+    return JsonResponse({
+        "authenticated": True,
+        "email": request.user.email,
+        "providers": settings.SOCIAL_LOGIN_CONFIGURED,
+        "profile": profile_data(profile_for(request)),
+    })
+
+
+@require_http_methods(["POST"])
+def api_signup(request):
+    try:
+        data = payload(request)
+        email = data["email"].strip().lower()
+        password = data["password"]
+        name = data.get("name", "").strip()
+        validate_email(email)
+        if len(password) < 8:
+            return error("비밀번호는 8자 이상으로 입력해 주세요.")
+        if get_user_model().objects.filter(username__iexact=email).exists():
+            return error("이미 가입된 이메일입니다.", 409)
+        user = get_user_model().objects.create_user(username=email, email=email, password=password)
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        profile = profile_for(request)
+        if name:
+            profile.name = name[:40]
+            profile.save(update_fields=["name"])
+    except (KeyError, TypeError, ValidationError):
+        return error("이메일과 비밀번호를 확인해 주세요.")
+    return JsonResponse({"authenticated": True, "profile": profile_data(profile)}, status=201)
+
+
+@require_http_methods(["POST"])
+def api_login(request):
+    try:
+        data = payload(request)
+        email = data["email"].strip().lower()
+        password = data["password"]
+    except (KeyError, AttributeError, ValueError):
+        return error("이메일과 비밀번호를 입력해 주세요.")
+    user = authenticate(request, username=email, password=password)
+    if user is None:
+        return error("이메일 또는 비밀번호가 맞지 않아요.", 401)
+    login(request, user)
+    return JsonResponse({"authenticated": True, "profile": profile_data(profile_for(request))})
+
+
+@require_http_methods(["POST"])
+def api_logout(request):
+    logout(request)
+    return JsonResponse({"authenticated": False})
 
 
 @require_http_methods(["GET", "PATCH"])

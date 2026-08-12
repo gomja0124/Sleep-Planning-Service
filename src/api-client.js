@@ -48,6 +48,10 @@ async function apiError(response) {
 
 export const api = {
   health: () => request("/api/v1/health/"),
+  authStatus: () => request("/api/v1/auth/status/"),
+  signup: (data) => request("/api/v1/auth/signup/", { method: "POST", body: JSON.stringify(data) }),
+  login: (data) => request("/api/v1/auth/login/", { method: "POST", body: JSON.stringify(data) }),
+  logout: () => request("/api/v1/auth/logout/", { method: "POST", body: "{}" }),
   me: () => request("/api/v1/me/"),
   updateMe: (data) => request("/api/v1/me/", { method: "PATCH", body: JSON.stringify(data) }),
   plans: (start, days = 7) => request(`/api/v1/plans/?start=${encodeURIComponent(start)}&days=${days}`),

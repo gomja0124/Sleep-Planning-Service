@@ -1,6 +1,6 @@
 # 밤가이 Django API
 
-프론트엔드와 분리된 Django 백엔드입니다. Google·Apple 소셜 로그인 세션으로 사용자 데이터를 구분합니다. 개발 환경에서는 `DJANGO_ALLOW_DEMO_USER=true`일 때 로그인 없이 `demo-user` 세션을 자동 생성합니다.
+프론트엔드와 분리된 Django 백엔드입니다. 이메일 계정 또는 Google·Apple 소셜 로그인 세션으로 사용자 데이터를 구분합니다. 데모 자동 로그인은 기본적으로 꺼져 있으며, 필요한 경우에만 `DJANGO_ALLOW_DEMO_USER=true`로 활성화합니다.
 
 ## 실행
 
@@ -24,6 +24,8 @@ npm run test:all
 | Method | Path | 용도 |
 | --- | --- | --- |
 | `GET`, `PATCH` | `/api/v1/me/` | 온보딩·프로필·시간 형식·알림 설정 |
+| `GET` | `/api/v1/auth/status/` | 현재 로그인 상태 |
+| `POST` | `/api/v1/auth/signup/`, `/login/`, `/logout/` | 이메일 계정과 세션 관리 |
 | `GET`, `POST` | `/api/v1/schedules/` | 고정·변동 일정 조회/생성 |
 | `PATCH`, `DELETE` | `/api/v1/schedules/{id}/` | 일정 수정/삭제 |
 | `GET` | `/api/v1/plans/?start=YYYY-MM-DD&days=7` | 일정·피드백 기반 수면 계획 |

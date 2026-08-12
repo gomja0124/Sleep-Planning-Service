@@ -141,8 +141,53 @@ class PlannerApiIntegrationTests(TestCase):
 
 @override_settings(ALLOW_DEMO_USER=False)
 class PlannerAuthenticationTests(TestCase):
+    def json_request(self, method, path, data=None):
+        return getattr(self.client, method)(
+            path,
+            data=json.dumps(data or {}),
+            content_type="application/json",
+        )
+
     def test_private_api_requires_login_outside_demo_mode(self):
         response = self.client.get("/api/v1/me/")
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["loginUrl"], "/auth/")
+
+    def test_email_signup_logout_and_login_flow(self):
+        anonymous = self.client.get("/api/v1/auth/status/")
+        self.assertFalse(anonymous.json()["authenticated"])
+
+        signup = self.json_request("post", "/api/v1/auth/signup/", {
+            "name": "소미",
+            "email": "somni@example.com",
+            "password": "safe-password-123",
+        })
+        self.assertEqual(signup.status_code, 201)
+        self.assertTrue(signup.json()["authenticated"])
+        self.assertEqual(signup.json()["profile"]["profile"]["name"], "소미")
+        self.assertFalse(signup.json()["profile"]["onboardingComplete"])
+
+        logout_response = self.json_request("post", "/api/v1/auth/logout/")
+        self.assertEqual(logout_response.status_code, 200)
+        self.assertEqual(self.client.get("/api/v1/me/").status_code, 401)
+
+        login_response = self.json_request("post", "/api/v1/auth/login/", {
+            "email": "SOMNI@example.com",
+            "password": "safe-password-123",
+        })
+        self.assertEqual(login_response.status_code, 200)
+        self.assertTrue(login_response.json()["authenticated"])
+
+    def test_signup_rejects_short_password_and_duplicate_email(self):
+        short = self.json_request("post", "/api/v1/auth/signup/", {
+            "email": "short@example.com",
+            "password": "short",
+        })
+        self.assertEqual(short.status_code, 400)
+
+        payload = {"email": "duplicate@example.com", "password": "safe-password-123"}
+        self.assertEqual(self.json_request("post", "/api/v1/auth/signup/", payload).status_code, 201)
+        self.json_request("post", "/api/v1/auth/logout/")
+        duplicate = self.json_request("post", "/api/v1/auth/signup/", payload)
+        self.assertEqual(duplicate.status_code, 409)
