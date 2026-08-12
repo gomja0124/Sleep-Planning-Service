@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 
 from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityPost, Feedback, PlanOverride, Profile, Schedule, SleepSession
 from .services import date_from_string, recommendation, time_string
+from .calendar_services import CalendarIntegrationError, sync_apple_events, sync_google_calendar
 
 
 def payload(request):
@@ -207,9 +208,19 @@ def calendar_connection(request, provider):
 @require_http_methods(["POST"])
 def sync_calendars(request):
     profile = profile_for(request)
-    updated = profile.calendar_connections.filter(connected=True).update(last_synced_at=timezone.now())
-    return JsonResponse({"syncedConnections": updated, "plansRecalculated": True})
-
+    results = []
+    google = profile.calendar_connections.filter(provider="google", connected=True).first()
+    if google:
+        try:
+            results.append(sync_google_calendar(profile, google.selected_calendar_id))
+        except CalendarIntegrationError as exc:
+            return error(exc.detail, exc.status)
+    apple = profile.calendar_connections.filter(provider="apple", connected=True).exists()
+    return JsonResponse({
+        "results": results,
+        "appleDeviceSyncRequired": apple,
+        "plansRecalculated": bool(results),
+    })
 
 @require_http_methods(["GET"])
 def challenges(request):
@@ -242,3 +253,32 @@ def community_posts(request):
         item = CommunityPost.objects.create(author=profile, post_type=data.get("type", "recruitment"), title=data["title"], body=data["body"], meta=data.get("meta", ""))
     except (KeyError, ValueError) as exc: return error(str(exc))
     return JsonResponse({"id": item.id, "title": item.title}, status=201)
+
+@require_http_methods(["POST"])
+def google_calendar_sync(request):
+    profile = profile_for(request)
+    try:
+        data = payload(request)
+        result = sync_google_calendar(profile, data.get("calendarId", "primary"))
+    except ValueError as exc:
+        return error(str(exc))
+    except CalendarIntegrationError as exc:
+        return error(exc.detail, exc.status)
+    result["plansRecalculated"] = True
+    return JsonResponse(result)
+
+
+@require_http_methods(["PUT"])
+def apple_calendar_events(request):
+    profile = profile_for(request)
+    try:
+        data = payload(request)
+        events = data.get("events", [])
+        deleted_ids = data.get("deletedIds", [])
+        if not isinstance(events, list) or not isinstance(deleted_ids, list):
+            return error("events와 deletedIds는 배열이어야 합니다.")
+        result = sync_apple_events(profile, events, deleted_ids)
+    except ValueError as exc:
+        return error(str(exc))
+    result["plansRecalculated"] = True
+    return JsonResponse(result)
