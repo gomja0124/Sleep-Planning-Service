@@ -2,6 +2,9 @@ import { api } from "./api-client.js";
 
 const app = document.querySelector("#app");
 const storeKey = "somni-prototype-v2";
+// Temporary local QA mode: the backend assigns each submission a new virtual
+// date, so the three-record recommendation threshold can be tested immediately.
+const testRecordMode = location.hostname === "localhost" || location.hostname === "127.0.0.1";
 
 const companions = {
   cat: { name: "Momo", ko: "모모", label: "포근한 휴식", species: "고양이", row: 0 },
@@ -405,6 +408,7 @@ function saveMorning() {
 async function saveDaytime() {
   const entry = {
     ...state.pendingFeedback,
+    testRecordMode,
     sleepiness: Number(state.checkin.sleepiness),
     napDurationMinutes: state.checkin.napDurationMinutes === "" ? null : Number(state.checkin.napDurationMinutes),
     napReason: state.checkin.napReason,
@@ -412,6 +416,7 @@ async function saveDaytime() {
   };
   if (state.backendConnected) {
     const saved = await api.saveFeedback(entry);
+    entry.date = saved.entry?.date ?? saved.date ?? entry.date;
     state.sleepAnalysis = saved.analysis ?? state.sleepAnalysis;
     if (state.activeSession?.id) state.activeSession = await api.updateSleep(state.activeSession.id, "complete");
     const feedback = await api.feedback();

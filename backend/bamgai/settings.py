@@ -4,6 +4,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "replace-this-development-key-before-deployment")
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
+SLEEP_RECORD_TEST_MODE = DEBUG and os.environ.get("SLEEP_RECORD_TEST_MODE", "true").lower() == "true"
 ALLOW_DEMO_USER = os.environ.get("DJANGO_ALLOW_DEMO_USER", "false").lower() == "true"
 FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:4173").rstrip("/")
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]

@@ -169,6 +169,28 @@ class PlannerApiIntegrationTests(TestCase):
         self.assertEqual(analysis_response.status_code, 200)
         self.assertTrue(analysis_response.json()["requiresEvaluation"])
 
+    @override_settings(SLEEP_RECORD_TEST_MODE=True)
+    def test_local_test_record_mode_accumulates_same_requested_date(self):
+        self.json_request("patch", "/api/v1/me/", {"targetSleepMinutes": 420})
+        responses = []
+        for _ in range(3):
+            responses.append(self.json_request("post", "/api/v1/feedback/", {
+                "date": "2026-08-12",
+                "actualSleep": "23:00",
+                "actualWake": "06:00",
+                "freshness": 2,
+                "sleepiness": 4,
+                "sleepOnsetDelayMinutes": 0,
+                "testRecordMode": True,
+            }))
+
+        self.assertEqual(
+            list(Profile.objects.get(user__username="demo-user").feedback_entries.order_by("date").values_list("date", flat=True)),
+            [date(2026, 8, 12), date(2026, 8, 13), date(2026, 8, 14)],
+        )
+        self.assertEqual(responses[-1].json()["analysis"]["recordCount"], 3)
+        self.assertGreater(responses[-1].json()["analysis"]["suggestedAdjustmentMinutes"], 0)
+
 
 class SleepAnalysisParityTests(TestCase):
     profile = {"targetSleepMinutes": 450}

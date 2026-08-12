@@ -249,6 +249,13 @@ def feedback(request):
         if nap_duration is not None and not 0 <= nap_duration <= 240:
             return error("낮잠 시간은 0~240분 사이여야 합니다.")
         target_date = date_from_string(data["date"])
+        # Local-only test aid: let repeated sleep cycles accumulate as separate
+        # records without waiting for the real calendar date to advance.
+        test_record_mode = settings.SLEEP_RECORD_TEST_MODE
+        if test_record_mode:
+            latest_date = profile.feedback_entries.order_by("-date").values_list("date", flat=True).first()
+            if latest_date is not None and target_date <= latest_date:
+                target_date = latest_date + timedelta(days=1)
         current_plan = recommendation(profile, target_date + timedelta(days=1))
         snapshot = {key: current_plan[key] for key in ("targetDate", "bedtimeWindowStart", "bedtimeWindowEnd", "bedtimeCenter", "wakeTime", "sleepMinutes")}
         with transaction.atomic():
@@ -277,7 +284,7 @@ def feedback(request):
                 profile.save(update_fields=["target_sleep_minutes", "adaptation_state", "updated_at"])
     except (KeyError, ValueError, ValidationError) as exc:
         return error(f"피드백 입력값을 확인해 주세요: {exc}")
-    return JsonResponse({"date": entry.date.isoformat(), "entry": feedback_data(entry), "analysis": analysis, "nextPlan": recommendation(profile, entry.date + timedelta(days=1))}, status=201)
+    return JsonResponse({"date": entry.date.isoformat(), "entry": feedback_data(entry), "analysis": analysis, "nextPlan": recommendation(profile, entry.date + timedelta(days=1)), "testRecordMode": test_record_mode}, status=201)
 
 
 @require_http_methods(["GET"])
