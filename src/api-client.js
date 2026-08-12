@@ -60,6 +60,7 @@ export const api = {
   startSleep: (targetDate) => request("/api/v1/sleep-sessions/", { method: "POST", body: JSON.stringify({ targetDate }) }),
   updateSleep: (id, status) => request(`/api/v1/sleep-sessions/${id}/`, { method: "PATCH", body: JSON.stringify({ status }) }),
   feedback: () => request("/api/v1/feedback/"),
+  sleepAnalysis: () => request("/api/v1/sleep-analysis/"),
   saveFeedback: (data) => request("/api/v1/feedback/", { method: "POST", body: JSON.stringify(data) }),
   updateCalendar: (provider, connected, syncMode = "manual") => request(`/api/v1/calendars/${provider}/`, { method: "PUT", body: JSON.stringify({ connected, syncMode }) }),
   syncCalendars: (mode = "manual") => request("/api/v1/calendars/sync/", { method: "POST", body: JSON.stringify({ mode }) }),

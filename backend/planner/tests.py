@@ -3,7 +3,8 @@ from datetime import date, timedelta
 
 from django.test import TestCase, override_settings
 
-from .models import Schedule
+from .models import Profile, Schedule
+from .sleep_analysis import analyze_sleep_history, calculate_bedtime_range_minutes
 
 
 @override_settings(ALLOW_DEMO_USER=True)
@@ -137,6 +138,98 @@ class PlannerApiIntegrationTests(TestCase):
         })
 
         self.assertEqual(response.status_code, 400)
+
+    def test_feedback_drives_adaptive_target_and_persists_extra_signals(self):
+        self.json_request("patch", "/api/v1/me/", {"targetSleepMinutes": 420})
+        responses = []
+        for day in (10, 11, 12):
+            responses.append(self.json_request("post", "/api/v1/feedback/", {
+                "date": f"2026-08-{day}",
+                "actualSleep": "23:00",
+                "actualWake": "06:00",
+                "freshness": 2,
+                "sleepiness": 4,
+                "sleepOnsetDelayMinutes": 0,
+                "napDurationMinutes": 35,
+                "napReason": "졸려서",
+            }))
+
+        result = responses[-1].json()
+        self.assertEqual(result["analysis"]["primaryState"], "LOW_CONDITION_DESPITE_DURATION")
+        self.assertEqual(result["analysis"]["suggestedAdjustmentMinutes"], 30)
+        profile = Profile.objects.get(user__username="demo-user")
+        self.assertEqual(profile.target_sleep_minutes, 450)
+        self.assertEqual(profile.adaptation_state["previousTargetSleepMinutes"], 420)
+        latest = profile.feedback_entries.get(date="2026-08-12")
+        self.assertEqual(latest.nap_duration_minutes, 35)
+        self.assertEqual(latest.sleep_onset_delay_minutes, 0)
+        self.assertIn("bedtimeWindowStart", latest.recommendation_snapshot)
+
+        analysis_response = self.client.get("/api/v1/sleep-analysis/")
+        self.assertEqual(analysis_response.status_code, 200)
+        self.assertTrue(analysis_response.json()["requiresEvaluation"])
+
+
+class SleepAnalysisParityTests(TestCase):
+    profile = {"targetSleepMinutes": 450}
+
+    @staticmethod
+    def entry(date, sleep="23:00", wake="06:30", freshness=3, sleepiness=3, **extra):
+        return {"date": date, "actualSleep": sleep, "actualWake": wake, "freshness": freshness, "sleepiness": sleepiness, **extra}
+
+    def test_midnight_duration_and_circular_bedtime_range(self):
+        result = analyze_sleep_history(self.profile, [self.entry("2026-08-12", "23:50", "07:20")])
+        self.assertEqual(result["records"][0]["sleepOpportunityMinutes"], 450)
+        self.assertEqual(calculate_bedtime_range_minutes(["23:30", "00:00", "00:30"]), 60)
+
+    def test_repeated_short_sleep_reaches_current_target_first(self):
+        feedback = [self.entry(f"2026-08-{day}", "01:00", "07:00", 2, 4) for day in range(8, 13)]
+        result = analyze_sleep_history(self.profile, feedback)
+        self.assertEqual(result["primaryState"], "INSUFFICIENT_SLEEP")
+        self.assertEqual(result["adjustmentStrategy"], "REACH_CURRENT_TARGET")
+        self.assertEqual(result["suggestedAdjustmentMinutes"], 0)
+
+    def test_low_condition_with_reached_target_explores_longer_sleep(self):
+        feedback = [self.entry(f"2026-08-{day}", "23:00", "06:30", 2, 4) for day in range(8, 13)]
+        result = analyze_sleep_history(self.profile, feedback)
+        self.assertEqual(result["primaryState"], "LOW_CONDITION_DESPITE_DURATION")
+        self.assertEqual(result["recommendedTargetSleepMinutes"], 480)
+        self.assertEqual(result["suggestedAdjustmentMinutes"], 30)
+
+    def test_stable_records_keep_current_plan(self):
+        feedback = [self.entry(f"2026-08-{day}", freshness=4, sleepiness=2) for day in range(6, 13)]
+        result = analyze_sleep_history(self.profile, feedback)
+        self.assertEqual(result["primaryState"], "STABLE")
+        self.assertEqual(result["recommendedAction"], "KEEP_CURRENT_PLAN")
+        self.assertEqual(result["confidence"], "high")
+
+    def test_candidate_target_waits_for_three_evaluation_records(self):
+        feedback = [self.entry("2026-08-11", "23:00", "06:00", 2, 4), self.entry("2026-08-12", "23:00", "06:00", 2, 4)]
+        result = analyze_sleep_history(
+            {"targetSleepMinutes": 420},
+            feedback,
+            {"candidateTargetSleepMinutes": 420, "evaluationStartDate": "2026-08-10"},
+        )
+        self.assertTrue(result["requiresEvaluation"])
+        self.assertEqual(result["suggestedAdjustmentMinutes"], 0)
+
+    def test_coarse_fine_and_maximum_target_steps_match_model_contract(self):
+        coarse = analyze_sleep_history(
+            {"targetSleepMinutes": 360},
+            [self.entry(f"2026-08-{day}", "23:00", "04:50", 3, 3, napDurationMinutes=40) for day in range(8, 13)],
+        )
+        fine = analyze_sleep_history(
+            {"targetSleepMinutes": 480},
+            [self.entry(f"2026-08-{day}", "22:00", "06:00", 2, 4) for day in range(8, 13)],
+        )
+        capped = analyze_sleep_history(
+            {"targetSleepMinutes": 540},
+            [self.entry(f"2026-08-{day}", "21:00", "06:00", 2, 4) for day in range(8, 13)],
+        )
+        self.assertEqual(coarse["suggestedAdjustmentMinutes"], 60)
+        self.assertEqual(fine["suggestedAdjustmentMinutes"], 15)
+        self.assertEqual(capped["suggestedAdjustmentMinutes"], 0)
+        self.assertEqual(capped["recommendedTargetSleepMinutes"], 540)
 
 
 @override_settings(ALLOW_DEMO_USER=False)

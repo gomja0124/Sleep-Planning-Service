@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/v1/plans/", views.plans),
     path("api/v1/plans/<str:target_date>/override/", views.plan_override),
     path("api/v1/feedback/", views.feedback),
+    path("api/v1/sleep-analysis/", views.sleep_analysis),
     path("api/v1/sleep-sessions/", views.sleep_sessions),
     path("api/v1/sleep-sessions/<int:session_id>/", views.sleep_session_detail),
     path("api/v1/calendars/sync/", views.sync_calendars),

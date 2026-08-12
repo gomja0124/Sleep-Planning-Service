@@ -6,6 +6,15 @@ from django.db import models
 def default_alert_settings():
     return {"routine": True, "lights-out": True, "wake": True}
 
+
+def default_adaptation_state():
+    return {
+        "candidateTargetSleepMinutes": None,
+        "previousTargetSleepMinutes": None,
+        "evaluationStartDate": None,
+        "lastAdjustmentMinutes": 0,
+    }
+
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, related_name="sleep_profile")
     external_id = models.CharField(max_length=64, unique=True)
@@ -19,6 +28,7 @@ class Profile(models.Model):
     adaptation_week = models.PositiveSmallIntegerField(default=1)
     time_format = models.CharField(max_length=3, choices=[("12h", "12h"), ("24h", "24h")], default="24h")
     alert_settings = models.JSONField(default=default_alert_settings)
+    adaptation_state = models.JSONField(default=default_adaptation_state)
     points = models.PositiveIntegerField(default=120)
     group_streak = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -61,6 +71,10 @@ class Feedback(models.Model):
     freshness = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     sleepiness = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
     failure_reason = models.CharField(max_length=240, blank=True)
+    sleep_onset_delay_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+    nap_duration_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+    nap_reason = models.CharField(max_length=80, blank=True)
+    recommendation_snapshot = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta
 
-from .models import Feedback, PlanOverride, Schedule
+from .models import PlanOverride, Schedule
+from .sleep_analysis import analyze_sleep_history
 
 STEP_MINUTES = 5
 
@@ -27,20 +28,6 @@ def duration_text(minutes):
     return f"{hours}시간 {minutes}분"
 
 
-def feedback_adjustment(profile):
-    entries = Feedback.objects.filter(profile=profile).order_by("-date")[:3]
-    entries = list(entries)
-    if not entries:
-        return 0, None
-    freshness = sum(item.freshness for item in entries) / len(entries)
-    sleepiness = sum(item.sleepiness for item in entries) / len(entries)
-    if freshness <= 2 and sleepiness >= 4:
-        return 30, "최근 아침 컨디션과 낮 졸림을 반영해 수면 여유를 30분 늘렸어요."
-    if freshness < 3 or sleepiness > 3:
-        return 15, "최근 컨디션 피드백을 반영해 수면 여유를 15분 늘렸어요."
-    return 0, "최근 컨디션이 안정적이라 현재 목표 수면 시간을 유지해요."
-
-
 def schedules_for(profile, target_date):
     weekday = (target_date.weekday() + 1) % 7  # Django 월요일=0 -> JavaScript 일요일=0
     result = []
@@ -52,7 +39,7 @@ def schedules_for(profile, target_date):
     return sorted(result, key=lambda item: item.start_time)
 
 
-def recommendation(profile, target_date):
+def recommendation(profile, target_date, analysis=None):
     day_schedules = schedules_for(profile, target_date)
     target_wake = _minutes(profile.target_wake)
     constraints = []
@@ -61,9 +48,8 @@ def recommendation(profile, target_date):
         constraints.append((required_wake, schedule))
     strongest = min(constraints, key=lambda entry: entry[0], default=None)
     wake_minutes = strongest[0] if strongest and strongest[0] < target_wake else target_wake
-    adjustment, adjustment_reason = feedback_adjustment(profile)
     base_sleep = min(max(profile.target_sleep_minutes, 300), 600)
-    sleep_minutes = base_sleep + adjustment
+    sleep_minutes = base_sleep
     bedtime = round((wake_minutes - sleep_minutes - profile.latency_minutes) / STEP_MINUTES) * STEP_MINUTES
     start, end = bedtime - 15, bedtime + 15
     reasons = []
@@ -75,8 +61,9 @@ def recommendation(profile, target_date):
     else:
         reasons.append(f"이른 일정이 없어 희망 기상 시각 {time_string(profile.target_wake)}을 기준으로 계산했어요.")
     reasons.append(f"목표 수면 {duration_text(base_sleep)}과 평균 입면 {duration_text(profile.latency_minutes)}을 반영했어요.")
-    if adjustment_reason:
-        reasons.append(adjustment_reason)
+    analysis = analysis or analyze_sleep_history(profile)
+    if analysis["reasons"]:
+        reasons.append(analysis["reasons"][0]["message"])
     override = PlanOverride.objects.filter(profile=profile, target_date=target_date).first()
     offset = max(-120, min(120, override.offset_minutes if override else 0))
     shift = lambda value: time_string(_time(value + offset))
@@ -84,7 +71,7 @@ def recommendation(profile, target_date):
         "targetDate": target_date.isoformat(), "wakeTime": time_string(_time(wake_minutes)),
         "bedtimeWindowStart": shift(start), "bedtimeWindowEnd": shift(end), "bedtimeCenter": shift(bedtime),
         "routineStart": shift(start - profile.routine_minutes), "sleepMinutes": max(0, sleep_minutes - offset),
-        "baseSleepMinutes": base_sleep, "feedbackAdjustmentMinutes": adjustment,
+        "baseSleepMinutes": base_sleep, "feedbackAdjustmentMinutes": 0,
         "userOffsetMinutes": offset, "saved": bool(override and override.saved), "reasons": reasons,
         "primaryScheduleId": strongest[1].id if strongest else None,
         "alerts": [{"type": "routine", "label": "취침 준비", "time": shift(start - profile.routine_minutes)}, {"type": "lights-out", "label": "불 끄기", "time": shift(start)}, {"type": "wake", "label": "기상", "time": time_string(_time(wake_minutes))}],

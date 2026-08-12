@@ -6,6 +6,7 @@ from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.db import transaction
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
@@ -15,6 +16,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityPost, Feedback, PlanOverride, Profile, Schedule, SleepSession
 from .services import date_from_string, recommendation, time_string
 from .calendar_services import CalendarIntegrationError, sync_apple_events, sync_google_calendar
+from .sleep_analysis import analyze_sleep_history
 
 
 def payload(request):
@@ -51,6 +53,21 @@ def auth_status(request):
 
 def schedule_data(item):
     return {"id": item.id, "kind": item.kind, "title": item.title, "source": item.source, "externalId": item.external_id, "days": item.days, "date": item.date.isoformat() if item.date else None, "startTime": time_string(item.start_time), "preparationMinutes": item.preparation_minutes, "commuteMinutes": item.commute_minutes}
+
+
+def feedback_data(item):
+    return {
+        "date": item.date.isoformat(),
+        "actualSleep": time_string(item.actual_sleep),
+        "actualWake": time_string(item.actual_wake),
+        "freshness": item.freshness,
+        "sleepiness": item.sleepiness,
+        "failureReason": item.failure_reason,
+        "sleepOnsetDelayMinutes": item.sleep_onset_delay_minutes,
+        "napDurationMinutes": item.nap_duration_minutes,
+        "napReason": item.nap_reason,
+        "recommendationSnapshot": item.recommendation_snapshot,
+    }
 
 
 def profile_data(profile):
@@ -197,7 +214,8 @@ def plans(request):
         days = min(max(int(request.GET.get("days", 7)), 1), 31)
     except ValueError:
         return error("start는 YYYY-MM-DD, days는 1~31이어야 합니다.")
-    return JsonResponse({"results": [recommendation(profile, start + timedelta(days=index)) for index in range(days)]})
+    analysis = analyze_sleep_history(profile)
+    return JsonResponse({"results": [recommendation(profile, start + timedelta(days=index), analysis) for index in range(days)], "analysis": analysis})
 
 
 @require_http_methods(["PUT"])
@@ -218,15 +236,53 @@ def plan_override(request, target_date):
 def feedback(request):
     profile = profile_for(request)
     if request.method == "GET":
-        results = [{"date": item.date.isoformat(), "actualSleep": time_string(item.actual_sleep), "actualWake": time_string(item.actual_wake), "freshness": item.freshness, "sleepiness": item.sleepiness, "failureReason": item.failure_reason} for item in profile.feedback_entries.order_by("-date")]
-        return JsonResponse({"results": results})
+        results = [feedback_data(item) for item in profile.feedback_entries.order_by("-date")]
+        return JsonResponse({"results": results, "analysis": analyze_sleep_history(profile)})
     try:
         data = payload(request)
-        entry, _ = Feedback.objects.update_or_create(profile=profile, date=data["date"], defaults={"actual_sleep": data["actualSleep"], "actual_wake": data["actualWake"], "freshness": data["freshness"], "sleepiness": data["sleepiness"], "failure_reason": data.get("failureReason", "")})
-        entry.full_clean(); entry.save()
+        onset = data.get("sleepOnsetDelayMinutes")
+        nap_duration = data.get("napDurationMinutes")
+        onset = None if onset in (None, "") else int(onset)
+        nap_duration = None if nap_duration in (None, "") else int(nap_duration)
+        if onset is not None and not 0 <= onset <= 240:
+            return error("입면 시간은 0~240분 사이여야 합니다.")
+        if nap_duration is not None and not 0 <= nap_duration <= 240:
+            return error("낮잠 시간은 0~240분 사이여야 합니다.")
+        target_date = date_from_string(data["date"])
+        current_plan = recommendation(profile, target_date + timedelta(days=1))
+        snapshot = {key: current_plan[key] for key in ("targetDate", "bedtimeWindowStart", "bedtimeWindowEnd", "bedtimeCenter", "wakeTime", "sleepMinutes")}
+        with transaction.atomic():
+            entry, _ = Feedback.objects.update_or_create(profile=profile, date=target_date, defaults={
+                "actual_sleep": data["actualSleep"],
+                "actual_wake": data["actualWake"],
+                "freshness": data["freshness"],
+                "sleepiness": data["sleepiness"],
+                "failure_reason": data.get("failureReason", ""),
+                "sleep_onset_delay_minutes": onset,
+                "nap_duration_minutes": nap_duration,
+                "nap_reason": data.get("napReason", ""),
+                "recommendation_snapshot": snapshot,
+            })
+            entry.full_clean(); entry.save()
+            analysis = analyze_sleep_history(profile)
+            if analysis["suggestedAdjustmentMinutes"] > 0 and analysis["recommendedTargetSleepMinutes"] != profile.target_sleep_minutes:
+                previous_target = profile.target_sleep_minutes
+                profile.target_sleep_minutes = analysis["recommendedTargetSleepMinutes"]
+                profile.adaptation_state = {
+                    "candidateTargetSleepMinutes": profile.target_sleep_minutes,
+                    "previousTargetSleepMinutes": previous_target,
+                    "evaluationStartDate": entry.date.isoformat(),
+                    "lastAdjustmentMinutes": analysis["suggestedAdjustmentMinutes"],
+                }
+                profile.save(update_fields=["target_sleep_minutes", "adaptation_state", "updated_at"])
     except (KeyError, ValueError, ValidationError) as exc:
         return error(f"피드백 입력값을 확인해 주세요: {exc}")
-    return JsonResponse({"date": entry.date.isoformat(), "nextPlan": recommendation(profile, entry.date + timedelta(days=1))}, status=201)
+    return JsonResponse({"date": entry.date.isoformat(), "entry": feedback_data(entry), "analysis": analysis, "nextPlan": recommendation(profile, entry.date + timedelta(days=1))}, status=201)
+
+
+@require_http_methods(["GET"])
+def sleep_analysis(request):
+    return JsonResponse(analyze_sleep_history(profile_for(request)))
 
 
 @require_http_methods(["GET", "POST"])
