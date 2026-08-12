@@ -215,9 +215,31 @@
       <div style="display:flex; flex-direction:column; gap:10px;">
         <sc-for list="{{ routineTasks }}" as="t" hint-placeholder-count="5">
           <div onclick="{{ t.toggle }}" style="display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:18px; background:{{ t.bg }}; cursor:pointer;">
-            <div style="width:42px; height:42px; border-radius:50%; background:{{ t.iconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">{{ t.iconSvg }}</div>
+            <div style="width:42px; height:42px; border-radius:50%; background:{{ t.iconBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <sc-if value="{{ t.isMoon }}" hint-placeholder-val="{{ false }}">
+                <div style="width:16px; height:16px; border-radius:50%; background:#F1E7D0; box-shadow:inset 5px -2px 0 0 {{ themeBg1 }};"></div>
+              </sc-if>
+              <sc-if value="{{ t.isWave }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:flex-end; gap:2px; height:16px;">
+                  <div style="width:3px; height:8px; background:#93C2F2; border-radius:1px;"></div>
+                  <div style="width:3px; height:16px; background:#93C2F2; border-radius:1px;"></div>
+                  <div style="width:3px; height:11px; background:#93C2F2; border-radius:1px;"></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ t.isDiamond }}" hint-placeholder-val="{{ false }}">
+                <div style="width:13px; height:13px; background:#9FE0C4; transform:rotate(45deg); border-radius:3px;"></div>
+              </sc-if>
+              <sc-if value="{{ t.isRing }}" hint-placeholder-val="{{ false }}">
+                <div style="width:16px; height:16px; border-radius:50%; border:3px solid #B7A9F0;"></div>
+              </sc-if>
+              <sc-if value="{{ t.isBook }}" hint-placeholder-val="{{ false }}">
+                <div style="width:16px; height:13px; border-radius:2px; background:#F1E7D0; position:relative;">
+                  <div style="position:absolute; top:5px; left:2px; width:12px; height:1.5px; background:{{ themeBg1 }};"></div>
+                </div>
+              </sc-if>
+            </div>
             <div style="flex:1;">
-              <div style="font-size:15px; font-weight:700; text-decoration:{{ t.strike }};">{{ t.label }}</div>
+              <div style="font-size:15px; font-weight:700; text-decoration:{{ t.strike }}; color:#F3F1EC;">{{ t.label }}</div>
               <div style="font-size:12.5px; color:#9A9BB0;">{{ t.sub }}</div>
             </div>
             <div style="width:24px; height:24px; border-radius:50%; border:2px solid {{ t.checkBorder }}; background:{{ t.checkBg }}; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
@@ -589,19 +611,14 @@ class Component extends DCLogic {
 
     // routine
     const doneCount = s.routineTasks.filter(t => t.done).length;
-    const iconSvgs = {
-      moon: '<div style="width:16px;height:16px;border-radius:50%;background:#F1E7D0;box-shadow:inset 5px -2px 0 0 ' + th.bg1 + ';"></div>',
-      wave: '<div style="display:flex;align-items:flex-end;gap:2px;height:16px;"><div style="width:3px;height:8px;background:#93C2F2;border-radius:1px;"></div><div style="width:3px;height:16px;background:#93C2F2;border-radius:1px;"></div><div style="width:3px;height:11px;background:#93C2F2;border-radius:1px;"></div></div>',
-      diamond: '<div style="width:13px;height:13px;background:#9FE0C4;transform:rotate(45deg);border-radius:3px;"></div>',
-      ring: '<div style="width:16px;height:16px;border-radius:50%;border:3px solid #B7A9F0;"></div>',
-      book: '<div style="width:16px;height:13px;border-radius:2px;background:#F1E7D0;position:relative;"><div style="position:absolute;top:5px;left:2px;width:12px;height:1.5px;background:' + th.bg1 + ';"></div></div>',
-    };
     const routineTasks = s.routineTasks.map(t => ({
       ...t, bg: th.bg1, sub: t.sub,
       strike: t.done ? 'line-through' : 'none',
       checkBorder: t.done ? '#9FE0C4' : 'rgba(255,255,255,0.2)',
       checkBg: t.done ? '#9FE0C4' : 'transparent',
-      iconBg: th.bg2, iconSvg: iconSvgs[t.icon],
+      iconBg: th.bg2,
+      isMoon: t.icon === 'moon', isWave: t.icon === 'wave', isDiamond: t.icon === 'diamond',
+      isRing: t.icon === 'ring', isBook: t.icon === 'book',
       toggle: () => this.setState({ routineTasks: s.routineTasks.map(x => x.id === t.id ? { ...x, done: !x.done } : x) }),
     }));
 
