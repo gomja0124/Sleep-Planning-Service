@@ -3,6 +3,8 @@ from datetime import date, timedelta
 
 from django.test import TestCase, override_settings
 
+from .models import Schedule
+
 
 @override_settings(ALLOW_DEMO_USER=True)
 class PlannerApiIntegrationTests(TestCase):
@@ -71,6 +73,38 @@ class PlannerApiIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("detail", response.json())
+
+    def test_apple_calendar_events_are_upserted_and_deleted(self):
+        first_response = self.json_request("put", "/api/v1/calendars/apple/events/", {
+            "events": [{
+                "externalId": "apple-event-1",
+                "title": "오전 세미나",
+                "startAt": "2026-08-14T09:00:00+09:00",
+            }, "invalid-event"],
+            "deletedIds": [],
+        })
+
+        self.assertEqual(first_response.status_code, 200)
+        self.assertEqual(first_response.json()["imported"], 1)
+        self.assertEqual(first_response.json()["skipped"], 1)
+        imported = Schedule.objects.get(source="apple", external_id="apple-event-1")
+        self.assertEqual(imported.title, "오전 세미나")
+        self.assertEqual(str(imported.start_time), "09:00:00")
+
+        delete_response = self.json_request("put", "/api/v1/calendars/apple/events/", {
+            "events": [],
+            "deletedIds": ["apple-event-1"],
+        })
+
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.json()["deleted"], 1)
+        self.assertFalse(Schedule.objects.filter(source="apple", external_id="apple-event-1").exists())
+
+    def test_google_calendar_sync_requires_google_authorization(self):
+        response = self.json_request("post", "/api/v1/calendars/google/sync/", {"calendarId": "primary"})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("Google 로그인", response.json()["detail"])
 
 
 @override_settings(ALLOW_DEMO_USER=False)

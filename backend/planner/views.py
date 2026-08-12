@@ -12,6 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityPost, Feedback, PlanOverride, Profile, Schedule, SleepSession
 from .services import date_from_string, recommendation, time_string
+from .calendar_services import CalendarIntegrationError, sync_apple_events, sync_google_calendar
 
 
 def payload(request):
@@ -47,11 +48,11 @@ def auth_status(request):
     return render(request, "planner/auth_status.html", {"profile": profile_for(request)})
 
 def schedule_data(item):
-    return {"id": item.id, "kind": item.kind, "title": item.title, "days": item.days, "date": item.date.isoformat() if item.date else None, "startTime": time_string(item.start_time), "preparationMinutes": item.preparation_minutes, "commuteMinutes": item.commute_minutes}
+    return {"id": item.id, "kind": item.kind, "title": item.title, "source": item.source, "externalId": item.external_id, "days": item.days, "date": item.date.isoformat() if item.date else None, "startTime": time_string(item.start_time), "preparationMinutes": item.preparation_minutes, "commuteMinutes": item.commute_minutes}
 
 
 def profile_data(profile):
-    calendars = {item.provider: {"connected": item.connected, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None} for item in profile.calendar_connections.all()}
+    calendars = {item.provider: {"connected": item.connected, "selectedCalendarId": item.selected_calendar_id, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None} for item in profile.calendar_connections.all()}
     return {"id": profile.external_id, "selectedCharacter": profile.selected_character, "onboardingComplete": profile.onboarding_complete, "profile": {"name": profile.name, "targetWake": time_string(profile.target_wake), "targetSleepMinutes": profile.target_sleep_minutes, "latencyMinutes": profile.latency_minutes, "routineMinutes": profile.routine_minutes, "adaptationWeek": profile.adaptation_week}, "settings": {"timeFormat": profile.time_format}, "alertSettings": profile.alert_settings, "community": {"points": profile.points, "groupStreak": profile.group_streak}, "calendarConnections": calendars}
 
 
@@ -219,9 +220,19 @@ def calendar_connection(request, provider):
 @require_http_methods(["POST"])
 def sync_calendars(request):
     profile = profile_for(request)
-    updated = profile.calendar_connections.filter(connected=True).update(last_synced_at=timezone.now())
-    return JsonResponse({"syncedConnections": updated, "plansRecalculated": True})
-
+    results = []
+    google = profile.calendar_connections.filter(provider="google", connected=True).first()
+    if google:
+        try:
+            results.append(sync_google_calendar(profile, google.selected_calendar_id))
+        except CalendarIntegrationError as exc:
+            return error(exc.detail, exc.status)
+    apple = profile.calendar_connections.filter(provider="apple", connected=True).exists()
+    return JsonResponse({
+        "results": results,
+        "appleDeviceSyncRequired": apple,
+        "plansRecalculated": bool(results),
+    })
 
 @require_http_methods(["GET"])
 def challenges(request):
@@ -254,3 +265,32 @@ def community_posts(request):
         item = CommunityPost.objects.create(author=profile, post_type=data.get("type", "recruitment"), title=data["title"], body=data["body"], meta=data.get("meta", ""))
     except (KeyError, ValueError) as exc: return error(str(exc))
     return JsonResponse({"id": item.id, "title": item.title}, status=201)
+
+@require_http_methods(["POST"])
+def google_calendar_sync(request):
+    profile = profile_for(request)
+    try:
+        data = payload(request)
+        result = sync_google_calendar(profile, data.get("calendarId", "primary"))
+    except ValueError as exc:
+        return error(str(exc))
+    except CalendarIntegrationError as exc:
+        return error(exc.detail, exc.status)
+    result["plansRecalculated"] = True
+    return JsonResponse(result)
+
+
+@require_http_methods(["PUT"])
+def apple_calendar_events(request):
+    profile = profile_for(request)
+    try:
+        data = payload(request)
+        events = data.get("events", [])
+        deleted_ids = data.get("deletedIds", [])
+        if not isinstance(events, list) or not isinstance(deleted_ids, list):
+            return error("events와 deletedIds는 배열이어야 합니다.")
+        result = sync_apple_events(profile, events, deleted_ids)
+    except ValueError as exc:
+        return error(str(exc))
+    result["plansRecalculated"] = True
+    return JsonResponse(result)

@@ -61,7 +61,7 @@ ACCOUNT_EMAIL_VERIFICATION = "none"
 SOCIALACCOUNT_ONLY = True
 SOCIALACCOUNT_LOGIN_ON_GET = False
 SOCIALACCOUNT_AUTO_SIGNUP = True
-SOCIALACCOUNT_STORE_TOKENS = False
+SOCIALACCOUNT_STORE_TOKENS = True
 LOGIN_REDIRECT_URL = f"{FRONTEND_ORIGIN}/?login=success"
 LOGOUT_REDIRECT_URL = "/auth/"
 
@@ -82,14 +82,16 @@ def _provider_app(prefix, *, apple=False):
     return app
 
 
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 google_app = _provider_app("GOOGLE")
 apple_app = _provider_app("APPLE", apple=True)
 SOCIAL_LOGIN_CONFIGURED = {"google": bool(google_app), "apple": bool(apple_app)}
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APPS": [google_app] if google_app else [],
-        "SCOPE": ["profile", "email"],
-        "AUTH_PARAMS": {"access_type": "online"},
+        "SCOPE": ["profile", "email", "https://www.googleapis.com/auth/calendar.readonly"],
+        "AUTH_PARAMS": {"access_type": "offline", "prompt": "consent"},
         "OAUTH_PKCE_ENABLED": True,
     },
     "apple": {"APPS": [apple_app] if apple_app else []},

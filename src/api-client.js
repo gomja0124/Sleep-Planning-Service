@@ -57,5 +57,9 @@ export const api = {
   updateSleep: (id, status) => request(`/api/v1/sleep-sessions/${id}/`, { method: "PATCH", body: JSON.stringify({ status }) }),
   feedback: () => request("/api/v1/feedback/"),
   saveFeedback: (data) => request("/api/v1/feedback/", { method: "POST", body: JSON.stringify(data) }),
+  updateCalendar: (provider, connected) => request(`/api/v1/calendars/${provider}/`, { method: "PUT", body: JSON.stringify({ connected }) }),
+  syncCalendars: () => request("/api/v1/calendars/sync/", { method: "POST", body: "{}" }),
+  syncGoogleCalendar: (calendarId = "primary") => request("/api/v1/calendars/google/sync/", { method: "POST", body: JSON.stringify({ calendarId }) }),
+  pushAppleCalendarEvents: (events, deletedIds = []) => request("/api/v1/calendars/apple/events/", { method: "PUT", body: JSON.stringify({ events, deletedIds }) }),
   loginUrl: `${API_BASE}/auth/`,
 };

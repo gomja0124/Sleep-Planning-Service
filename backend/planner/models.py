@@ -29,6 +29,8 @@ class Schedule(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="schedules")
     kind = models.CharField(max_length=8, choices=[("fixed", "fixed"), ("variable", "variable")])
     title = models.CharField(max_length=120)
+    source = models.CharField(max_length=10, choices=[("manual", "manual"), ("google", "google"), ("apple", "apple")], default="manual")
+    external_id = models.CharField(max_length=255, null=True, blank=True)
     days = models.JSONField(default=list, blank=True)
     date = models.DateField(null=True, blank=True)
     start_time = models.TimeField()
@@ -41,6 +43,8 @@ class Schedule(models.Model):
 class CalendarConnection(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="calendar_connections")
     provider = models.CharField(max_length=10, choices=[("apple", "Apple"), ("google", "Google")])
+    selected_calendar_id = models.CharField(max_length=255, default="primary")
+    sync_token = models.TextField(blank=True)
     connected = models.BooleanField(default=False)
     last_synced_at = models.DateTimeField(null=True, blank=True)
 
