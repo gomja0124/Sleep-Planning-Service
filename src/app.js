@@ -3,12 +3,12 @@ import {
   addDays,
   applyPlanOffset,
   dateKey,
-  feedbackAdjustment,
   formatDisplayTime,
   formatDuration,
   formatKoreanDate,
   generateRecommendations,
 } from "./planner.mjs";
+import { analyzeSleepHistory } from "./sleep-analysis.mjs";
 
 const STORAGE_KEY = "bamgai-demo-v1";
 
@@ -115,6 +115,13 @@ function seedState() {
       },
     ],
     feedback: [],
+    adaptationState: {
+      candidateTargetSleepMinutes: null,
+      previousTargetSleepMinutes: null,
+      evaluationStartDate: null,
+      lastAdjustmentMinutes: 0,
+    },
+    recommendationHistory: {},
     alertSettings: { routine: true, "lights-out": true, wake: true },
     settings: { timeFormat: "24h" },
     calendarConnections: {
@@ -147,6 +154,8 @@ function loadState() {
           google: { ...base.calendarConnections.google, ...saved.calendarConnections?.google },
         },
         planOverrides: { ...base.planOverrides, ...saved.planOverrides },
+        adaptationState: { ...base.adaptationState, ...saved.adaptationState },
+        recommendationHistory: { ...base.recommendationHistory, ...saved.recommendationHistory },
         sleepSession: { ...base.sleepSession, ...saved.sleepSession },
         community: { ...base.community, ...saved.community },
       };
@@ -180,13 +189,30 @@ function persist() {
 }
 
 function getPlans() {
-  return generateRecommendations({
+  const analysis = analyzeSleepHistory({
     profile: state.profile,
-    schedules: state.schedules,
     feedback: state.feedback,
+    adaptationState: state.adaptationState,
+  });
+  const planningProfile = {
+    ...state.profile,
+    targetSleepMinutes: analysis.recommendedTargetSleepMinutes,
+  };
+  return generateRecommendations({
+    profile: planningProfile,
+    schedules: state.schedules,
+    feedback: [],
     startDate: addDays(new Date(), 1),
     days: 7,
   }).map((plan) => applyPlanOffset(plan, state.planOverrides[plan.targetDate] ?? 0));
+}
+
+function getSleepAnalysis() {
+  return analyzeSleepHistory({
+    profile: state.profile,
+    feedback: state.feedback,
+    adaptationState: state.adaptationState,
+  });
 }
 
 function displayTime(value) {
@@ -348,7 +374,7 @@ function renderToday() {
   const [plan, ...laterPlans] = getPlans();
   const isSaved = state.savedPlanDate === plan.targetDate;
   const primary = plan.primarySchedule;
-  const adjustment = feedbackAdjustment(state.feedback);
+  const adjustment = getSleepAnalysis();
   const offsetLabel = plan.userOffsetMinutes
     ? `${plan.userOffsetMinutes > 0 ? "+" : ""}${plan.userOffsetMinutes}분 조절됨`
     : "추천값";
@@ -377,7 +403,7 @@ function renderToday() {
         </div>
       </div>
       ${heroCharacter()}
-      ${adjustment.minutes ? `<span class="adjustment-badge">피드백 반영 · ${adjustment.minutes}분 추가</span>` : ""}
+      ${adjustment.suggestedAdjustmentMinutes ? `<span class="adjustment-badge">개인화 탐색 · ${adjustment.suggestedAdjustmentMinutes}분 추가</span>` : ""}
     </section>
 
     ${renderReasons(plan)}
@@ -505,7 +531,7 @@ function feedbackCard(entry) {
 }
 
 function renderFeedback() {
-  const impact = feedbackAdjustment(state.feedback);
+  const impact = getSleepAnalysis();
   const plan = getPlans()[0];
   const cameFromAlarm = state.sleepSession.status === "checking";
   return `
@@ -522,6 +548,11 @@ function renderFeedback() {
             <label class="field"><span>실제 취침 시각</span><input name="actualSleep" type="time" value="${plan.bedtimeCenter}" required></label>
             <label class="field"><span>실제 기상 시각</span><input name="actualWake" type="time" value="${state.profile.targetWake}" required></label>
           </div>
+          <div class="form-grid two">
+            <label class="field"><span>불 끈 뒤 잠들기까지</span><select name="sleepOnsetDelayMinutes"><option value="">기억나지 않음</option><option value="0">거의 바로</option><option value="20">10~30분</option><option value="45">30~60분</option><option value="60">60분 이상</option></select></label>
+            <label class="field"><span>낮잠 시간</span><div class="input-unit"><input name="napDurationMinutes" type="number" min="0" max="240" step="5" placeholder="없으면 0"><span>분</span></div></label>
+          </div>
+          <label class="field"><span>낮잠을 잤다면 이유</span><select name="napReason"><option value="">해당 없음</option><option value="졸려서">졸려서</option><option value="전날 잠이 부족해서">전날 잠이 부족해서</option><option value="습관적으로">습관적으로</option><option value="휴식하려고">휴식하려고</option><option value="기타">기타</option></select></label>
           <fieldset class="field score-field"><legend>아침에 얼마나 개운했나요?</legend>${scoreOptions("freshness", ["많이 피곤", "피곤", "보통", "개운", "아주 개운"])}</fieldset>
           <fieldset class="field score-field"><legend>낮에 얼마나 졸렸나요?</legend>${scoreOptions("sleepiness", ["전혀 아님", "조금", "보통", "졸림", "매우 졸림"])}</fieldset>
           <label class="field"><span>계획을 지키기 어려웠다면</span><select name="failureReason"><option value="">해당 없음</option><option>휴대폰을 오래 봄</option><option>과제·공부</option><option>늦은 약속</option><option>잠이 오지 않음</option><option>기타</option></select></label>
@@ -530,7 +561,7 @@ function renderFeedback() {
       </section>
       <div class="feedback-side">
         <section class="impact-card">
-          <span class="impact-icon">${icon("spark")}</span><div><span>현재 개인화 반영</span><h3>${impact.minutes ? `수면 여유 +${impact.minutes}분` : "기본 리듬 유지"}</h3><p>${impact.reason ?? "첫 피드백을 남기면 다음 계획에 반영할게요."}</p></div>
+          <span class="impact-icon">${icon("spark")}</span><div><span>현재 개인화 반영</span><h3>${impact.suggestedAdjustmentMinutes ? `목표 수면 +${impact.suggestedAdjustmentMinutes}분` : impact.adjustmentStrategy === "REACH_CURRENT_TARGET" ? "현재 목표 먼저 확보" : "현재 목표 관찰"}</h3><p>${impact.reasons[0]?.message ?? "첫 피드백을 남기면 다음 계획에 반영할게요."}</p></div>
         </section>
         <section class="card history-card">
           <div class="card-heading"><div><span class="card-kicker">RECENT</span><h3>최근 기록</h3></div><span class="soft-chip">${state.feedback.length}회</span></div>
@@ -640,7 +671,7 @@ function calendarConnectionRow(provider, label, description) {
 
 function renderRhythm() {
   const plans = getPlans();
-  const impact = feedbackAdjustment(state.feedback);
+  const impact = getSleepAnalysis();
   return `
     <section class="page-heading compact-heading">
       <div><span class="section-kicker">MY RHYTHM</span><h1>도경님의 기준을 알려 주세요.</h1><p>앱이 무조건 일찍 자라고 하지 않도록, 원하는 리듬을 먼저 기준으로 삼아요.</p></div>
@@ -670,7 +701,7 @@ function renderRhythm() {
           <article class="${state.profile.adaptationWeek > 3 ? "is-current" : ""}"><span>02</span><div><b>리듬 안정화 이후</b><p>도경님이 요청할 때 전체 계획을 갱신하고, 피드백은 계속 리포트에 누적해요.</p></div></article>
           <article><span>03</span><div><b>과도한 변화 방지</b><p>낮은 컨디션이 반복돼도 한 번에 15~30분만 여유를 늘려 부담을 줄여요.</p></div></article>
         </div>
-        <div class="policy-impact">${icon("spark")} <span><b>현재 적용값</b>${impact.reason ?? "피드백이 없어 기본 목표를 사용 중이에요."}</span></div>
+        <div class="policy-impact">${icon("spark")} <span><b>현재 적용값</b>${impact.reasons[0]?.message ?? "피드백이 없어 기본 목표를 사용 중이에요."}</span></div>
       </section>
     </div>
     <section class="settings-grid">
@@ -984,6 +1015,7 @@ document.addEventListener("submit", (event) => {
   }
 
   if (form.id === "feedback-form") {
+    const plan = getPlans()[0];
     const entry = {
       date: String(data.get("date")),
       actualSleep: String(data.get("actualSleep")),
@@ -991,9 +1023,39 @@ document.addEventListener("submit", (event) => {
       freshness: Number(data.get("freshness")),
       sleepiness: Number(data.get("sleepiness")),
       failureReason: String(data.get("failureReason") || ""),
+      sleepOnsetDelayMinutes: data.get("sleepOnsetDelayMinutes") === ""
+        ? null
+        : Number(data.get("sleepOnsetDelayMinutes")),
+      napDurationMinutes: data.get("napDurationMinutes") === ""
+        ? null
+        : Number(data.get("napDurationMinutes")),
+      napReason: String(data.get("napReason") || ""),
+      recommendationSnapshot: {
+        targetDate: plan.targetDate,
+        bedtimeWindowStart: plan.bedtimeWindowStart,
+        bedtimeWindowEnd: plan.bedtimeWindowEnd,
+        bedtimeCenter: plan.bedtimeCenter,
+        wakeTime: plan.wakeTime,
+        targetSleepMinutes: plan.sleepMinutes,
+      },
     };
     state.feedback = state.feedback.filter((item) => item.date !== entry.date);
     state.feedback.push(entry);
+    state.recommendationHistory[entry.date] = entry.recommendationSnapshot;
+
+    const analysis = getSleepAnalysis();
+    if (analysis.suggestedAdjustmentMinutes > 0
+      && analysis.recommendedTargetSleepMinutes !== state.profile.targetSleepMinutes) {
+      const previousTarget = state.profile.targetSleepMinutes;
+      state.profile.targetSleepMinutes = analysis.recommendedTargetSleepMinutes;
+      state.adaptationState = {
+        ...state.adaptationState,
+        previousTargetSleepMinutes: previousTarget,
+        candidateTargetSleepMinutes: analysis.recommendedTargetSleepMinutes,
+        evaluationStartDate: entry.date,
+        lastAdjustmentMinutes: analysis.suggestedAdjustmentMinutes,
+      };
+    }
     const completedAlarmFlow = state.sleepSession.status === "checking";
     if (completedAlarmFlow) {
       state.sleepSession.status = "complete";
