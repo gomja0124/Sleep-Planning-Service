@@ -4,6 +4,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "replace-this-development-key-before-deployment")
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
+ALLOW_DEMO_USER = os.environ.get("DJANGO_ALLOW_DEMO_USER", "true" if DEBUG else "false").lower() == "true"
+FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:4173").rstrip("/")
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"]
 
 INSTALLED_APPS = [
@@ -13,6 +15,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "corsheaders",
     "django.contrib.sites",
     "allauth",
     "allauth.account",
@@ -24,6 +27,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -45,6 +49,9 @@ USE_TZ = True
 STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SITE_ID = 1
+CORS_ALLOWED_ORIGINS = [FRONTEND_ORIGIN]
+CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [FRONTEND_ORIGIN]
 
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
@@ -55,7 +62,7 @@ SOCIALACCOUNT_ONLY = True
 SOCIALACCOUNT_LOGIN_ON_GET = False
 SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_STORE_TOKENS = False
-LOGIN_REDIRECT_URL = "/auth/status/"
+LOGIN_REDIRECT_URL = f"{FRONTEND_ORIGIN}/?login=success"
 LOGOUT_REDIRECT_URL = "/auth/"
 
 

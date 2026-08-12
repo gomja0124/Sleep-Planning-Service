@@ -1,6 +1,6 @@
 # 밤가이 Django API
 
-프론트엔드와 분리된 Django 백엔드입니다. MVP에서는 `X-User-Id` 헤더로 사용자 데이터를 구분하며, 헤더가 없으면 `demo-user`를 사용합니다. 실제 배포 전에는 이 식별을 인증된 사용자 ID로 교체해야 합니다.
+프론트엔드와 분리된 Django 백엔드입니다. Google·Apple 소셜 로그인 세션으로 사용자 데이터를 구분합니다. 개발 환경에서는 `DJANGO_ALLOW_DEMO_USER=true`일 때 로그인 없이 `demo-user` 세션을 자동 생성합니다.
 
 ## 실행
 
@@ -9,6 +9,14 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/python backend/manage.py migrate
 .venv/bin/python backend/manage.py runserver
+```
+
+프론트엔드는 별도 터미널에서 `npm run dev`로 실행하고 `http://localhost:4173`을 엽니다. 기본 API 주소는 `http://localhost:8000`입니다.
+
+## 테스트
+
+```bash
+npm run test:all
 ```
 
 ## API

@@ -9,6 +9,7 @@ urlpatterns = [
     path("auth/", views.social_login, name="social-login"),
     path("auth/status/", views.auth_status, name="auth-status"),
     path("api/v1/health/", views.health),
+    path("api/v1/csrf/", views.csrf),
     path("api/v1/me/", views.me),
     path("api/v1/schedules/", views.schedules),
     path("api/v1/schedules/<int:schedule_id>/", views.schedule_detail),

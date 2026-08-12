@@ -3,10 +3,12 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityPost, Feedback, PlanOverride, Profile, Schedule, SleepSession
 from .services import date_from_string, recommendation, time_string
@@ -58,6 +60,12 @@ def health(request):
     return JsonResponse({"status": "ok"})
 
 
+@ensure_csrf_cookie
+@require_http_methods(["GET"])
+def csrf(request):
+    return JsonResponse({"status": "ok"})
+
+
 @require_http_methods(["GET", "PATCH"])
 def me(request):
     profile = profile_for(request)
@@ -97,7 +105,7 @@ def schedules(request):
         if item.kind == "variable" and not item.date:
             return error("변동 일정은 날짜가 필요합니다.")
         item.full_clean(); item.save()
-    except (KeyError, ValueError) as exc:
+    except (KeyError, ValueError, ValidationError) as exc:
         return error(f"일정 입력값을 확인해 주세요: {exc}")
     return JsonResponse(schedule_data(item), status=201)
 
@@ -117,7 +125,7 @@ def schedule_detail(request, schedule_id):
         for source, target in mapping.items():
             if source in data: setattr(item, target, data[source])
         item.full_clean(); item.save()
-    except ValueError as exc:
+    except (ValueError, ValidationError) as exc:
         return error(str(exc))
     return JsonResponse(schedule_data(item))
 
@@ -157,7 +165,7 @@ def feedback(request):
         data = payload(request)
         entry, _ = Feedback.objects.update_or_create(profile=profile, date=data["date"], defaults={"actual_sleep": data["actualSleep"], "actual_wake": data["actualWake"], "freshness": data["freshness"], "sleepiness": data["sleepiness"], "failure_reason": data.get("failureReason", "")})
         entry.full_clean(); entry.save()
-    except (KeyError, ValueError) as exc:
+    except (KeyError, ValueError, ValidationError) as exc:
         return error(f"피드백 입력값을 확인해 주세요: {exc}")
     return JsonResponse({"date": entry.date.isoformat(), "nextPlan": recommendation(profile, entry.date + timedelta(days=1))}, status=201)
 
@@ -170,8 +178,9 @@ def sleep_sessions(request):
         return JsonResponse({"results": [session_data(item) for item in items]})
     try:
         data = payload(request)
-        item = SleepSession.objects.create(profile=profile, target_date=data["targetDate"], status=data.get("status", "sleeping"), started_at=timezone.now())
-    except (KeyError, ValueError) as exc:
+        item = SleepSession(profile=profile, target_date=data["targetDate"], status=data.get("status", "sleeping"), started_at=timezone.now())
+        item.full_clean(); item.save()
+    except (KeyError, ValueError, ValidationError) as exc:
         return error(str(exc))
     return JsonResponse(session_data(item), status=201)
 
@@ -190,7 +199,10 @@ def sleep_session_detail(request, session_id):
     if "status" in data: item.status = data["status"]
     if item.status == "checking" and not item.dismissed_at: item.dismissed_at = timezone.now()
     if item.status in {"complete", "idle"}: item.ended_at = timezone.now()
-    item.full_clean(); item.save()
+    try:
+        item.full_clean(); item.save()
+    except ValidationError as exc:
+        return error(str(exc))
     return JsonResponse(session_data(item))
 
 
