@@ -19,6 +19,8 @@ const initial = {
   screen: "home",
   routine: { sound: false, breathe: false, journal: false },
   checkin: { actualSleep: "23:30", actualWake: "07:30", freshness: 3, sleepiness: 3 },
+  pendingFeedback: null,
+  pendingSleepStart: false,
   plan: null,
   feedback: [],
   activeSession: null,
@@ -65,6 +67,32 @@ function targetSleepMinutes() {
 function formatDate() {
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "long", day: "numeric" })
     .format(new Date()).toUpperCase();
+}
+
+function formatLockDate() {
+  return new Intl.DateTimeFormat("ko-KR", { weekday: "long", month: "long", day: "numeric" })
+    .format(new Date());
+}
+
+function formatClock(date = new Date()) {
+  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })
+    .format(date);
+}
+
+function formatMeridiem(value) {
+  const [hour, minute] = value.split(":").map(Number);
+  const period = hour < 12 ? "오전" : "오후";
+  return `${period} ${hour % 12 || 12}:${String(minute).padStart(2, "0")}`;
+}
+
+function elapsedSleep() {
+  const startedAt = state.activeSession?.startedAt ? new Date(state.activeSession.startedAt) : new Date();
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - startedAt.getTime()) / 60000));
+  return {
+    label: `${Math.floor(elapsedMinutes / 60)}시간 ${String(elapsedMinutes % 60).padStart(2, "0")}분 수면 중`,
+    progress: Math.min(100, Math.max(5, elapsedMinutes / targetSleepMinutes() * 100)),
+    startedAt: formatMeridiem(`${String(startedAt.getHours()).padStart(2, "0")}:${String(startedAt.getMinutes()).padStart(2, "0")}`),
+  };
 }
 
 function applyProfile(data) {
@@ -155,16 +183,26 @@ function routine() {
 
 function report() {
   const latest = state.feedback?.[0];
-  const actualSleep = latest?.actualSleep ?? "23:48";
-  const actualWake = latest?.actualWake ?? "07:06";
+  const displayedRecord = state.pendingFeedback ?? latest;
+  const actualSleep = displayedRecord?.actualSleep ?? "23:48";
+  const actualWake = displayedRecord?.actualWake ?? "07:06";
   const duration = (minutes(actualWake) - minutes(actualSleep) + 1440) % 1440;
   const hours = Math.floor(duration / 60);
   const mins = duration % 60;
-  return shell(`<section class="page report-page"><header><div><span class="eyebrow">SLEEP REPORT</span><h1>지난밤의<br>편안한 기록.</h1></div>${character(state.companion, "sleeping", "header-art")}</header><section class="report-card"><span>${latest?.date ?? "최근 기록"}</span><div><strong>${hours}<small>h</small> ${mins}<small>m</small></strong><p>수면 시간</p></div><div class="sleep-bar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>${actualSleep} 취침 <b>·</b> ${actualWake} 기상</small></section><section class="feedback"><span class="soft-icon">✦</span><div><b>조금씩 내 리듬에 가까워지고 있어요.</b><p>${latest ? `개운함 ${latest.freshness}/5 · 낮 졸림 ${latest.sleepiness}/5` : "첫 수면 기록을 남기면 나만의 변화가 여기에 쌓여요."}</p></div></section><section class="section-title"><div><span class="eyebrow">THIS WEEK</span><h2>나의 수면 리듬</h2></div><button>7일</button></section><div class="chart">${[58, 72, 48, 80, 64, 88, 70].map((height, index) => `<span><i style="height:${height}%"></i><small>${"M T W T F S S".split(" ")[index]}</small></span>`).join("")}</div></section>`);
+  const pendingCopy = state.pendingFeedback
+    ? "낮 시간 졸림은 오늘 하루를 보낸 뒤, 다음 취침 직전에 물어볼게요."
+    : latest
+      ? `개운함 ${latest.freshness}/5 · 낮 졸림 ${latest.sleepiness}/5`
+      : "첫 수면 기록을 남기면 나만의 변화가 여기에 쌓여요.";
+  return shell(`<section class="page report-page"><header><div><span class="eyebrow">SLEEP REPORT</span><h1>지난밤의<br>편안한 기록.</h1></div>${character(state.companion, "sleeping", "header-art")}</header><section class="report-card"><span>${displayedRecord?.date ?? "최근 기록"}</span><div><strong>${hours}<small>h</small> ${mins}<small>m</small></strong><p>수면 시간</p></div><div class="sleep-bar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>${actualSleep} 취침 <b>·</b> ${actualWake} 기상</small></section><section class="feedback"><span class="soft-icon">✦</span><div><b>${state.pendingFeedback ? "아침 기록을 임시 저장했어요." : "조금씩 내 리듬에 가까워지고 있어요."}</b><p>${pendingCopy}</p></div></section><section class="section-title"><div><span class="eyebrow">THIS WEEK</span><h2>나의 수면 리듬</h2></div><button>7일</button></section><div class="chart">${[58, 72, 48, 80, 64, 88, 70].map((height, index) => `<span><i style="height:${height}%"></i><small>${"M T W T F S S".split(" ")[index]}</small></span>`).join("")}</div></section>`);
 }
 
 function checkin() {
-  return shell(`<section class="page settings-page"><header><span class="eyebrow">MORNING CHECK-IN</span><h1>오늘 아침은<br>어떤가요?</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>짧게 기록해 주세요.</b><p>다음 수면 추천에 바로 반영할게요.</p></div></section><section class="setting-group"><span>지난밤 기록</span><label><b>실제 취침 시각</b><input type="time" data-checkin="actualSleep" value="${state.checkin.actualSleep}"></label><label><b>실제 기상 시각</b><input type="time" data-checkin="actualWake" value="${state.checkin.actualWake}"></label></section><section class="setting-group"><span>컨디션</span><label><b>아침 개운함</b><select data-checkin="freshness">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(state.checkin.freshness) === value ? "selected" : ""}>${value} / 5</option>`).join("")}</select></label><label><b>낮 시간 졸림</b><select data-checkin="sleepiness">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(state.checkin.sleepiness) === value ? "selected" : ""}>${value} / 5</option>`).join("")}</select></label></section><button class="primary sleep-button" data-save-feedback>${icon("check")} 기록 저장하기</button></section>`);
+  return shell(`<section class="page settings-page"><header><span class="eyebrow">MORNING CHECK-IN</span><h1>오늘 아침은<br>어떤가요?</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>지금 느끼는 것만 기록해요.</b><p>낮 졸림은 오늘 밤 잠들기 전에 물어볼게요.</p></div></section><section class="setting-group"><span>지난밤 기록</span><label><b>실제 취침 시각</b><input type="time" data-checkin="actualSleep" value="${state.checkin.actualSleep}"></label><label><b>실제 기상 시각</b><input type="time" data-checkin="actualWake" value="${state.checkin.actualWake}"></label></section><section class="setting-group"><span>아침 컨디션</span><label><b>지금 얼마나 개운한가요?</b><select data-checkin="freshness">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(state.checkin.freshness) === value ? "selected" : ""}>${value} / 5</option>`).join("")}</select></label></section><p class="timing-note">낮 시간 졸림은 하루를 충분히 보낸 후 평가해야 더 정확해요.</p><button class="primary sleep-button" data-save-morning>${icon("check")} 아침 기록 저장</button></section>`);
+}
+
+function daytimeCheckin() {
+  return shell(`<section class="page settings-page daytime-checkin"><header><span class="eyebrow">BEFORE BED CHECK-IN</span><h1>오늘 낮에는<br>얼마나 졸렸나요?</h1></header><section class="profile-card">${character(state.companion, "tired", "profile-art")}<div><b>하루를 돌아볼 시간이에요.</b><p>지난밤 수면이 낮 컨디션에 미친 영향을 기록해요.</p></div></section><section class="sleepiness-scale" role="radiogroup" aria-label="낮 시간 졸림"><span>거의<br>안 졸림</span>${[1, 2, 3, 4, 5].map((value) => `<button data-sleepiness="${value}" class="${Number(state.checkin.sleepiness) === value ? "selected" : ""}" aria-pressed="${Number(state.checkin.sleepiness) === value}">${value}</button>`).join("")}<span>매우<br>졸림</span></section><p class="timing-note">이 답변을 지난밤 기록에 합친 뒤 오늘의 수면 모드를 시작할게요.</p><button class="primary sleep-button" data-save-daytime>${icon("moon")} 평가하고 수면 시작</button></section>`);
 }
 
 function settings() {
@@ -173,12 +211,13 @@ function settings() {
 }
 
 function sleep() {
-  return `<main class="sleep-screen"><div class="safe-top"><span>11:28</span><span>${state.backendConnected ? "● SYNC" : "● DEMO"}</span></div><button class="close-sleep" data-end-sleep>×</button><div class="sleep-orbit"></div>${character(state.companion, "sleeping", "sleep-art")}<span class="eyebrow">SLEEP MODE</span><h1>편안한 밤 보내요.</h1><p>알림은 ${state.wake}에 울릴 거예요.</p><div class="now-playing"><i>${icon("sound")}</i><span><b>Gentle Rain</b><small>수면 사운드 · 재생 중</small></span><button>Ⅱ</button></div><button class="sleep-end" data-end-sleep>수면 모드 종료</button></main>`;
+  const elapsed = elapsedSleep();
+  return `<main class="sleep-screen lock-screen"><div class="lock-wallpaper"></div><div class="ios-status"><strong>${formatClock()}</strong><span class="dynamic-island"></span><span class="status-icons">▮▮▮ ⌁ ▰</span></div><div class="expand-hint">⌄ 탭하여 펼치기</div><section class="lock-clock"><span>${formatLockDate()}</span><strong>${formatClock()}</strong></section><section class="live-activity" aria-label="Somni 수면 Live Activity"><header><span class="live-app-icon"></span><b>SOMNI</b><em>Live</em></header><div class="live-main"><div class="live-avatar">${character(state.companion, "sleeping", "live-character")}</div><div><h1>수면 기록 중</h1><p>${elapsed.label}</p></div></div><div class="live-progress"><i style="width:${elapsed.progress}%"></i></div><div class="live-meta"><span><small>시작 시각</small><b>${elapsed.startedAt}</b></span><span><small>알람 설정</small><b>${formatMeridiem(state.wake)}</b></span></div></section><button class="return-to-somni" data-end-sleep>Somni로 돌아가 기상 체크</button><div class="home-indicator"></div></main>`;
 }
 
 function render() {
   if (!state.onboarding) onboarding();
-  else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, report, settings, checkin }[state.screen] || home)();
+  else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, report, settings, checkin, "daytime-checkin": daytimeCheckin }[state.screen] || home)();
 }
 
 function showToast(message) {
@@ -205,9 +244,25 @@ async function completeOnboarding() {
 }
 
 async function startSleep() {
+  if (state.pendingFeedback) {
+    state.pendingSleepStart = true;
+    state.screen = "daytime-checkin";
+    return;
+  }
+  await enterSleep();
+}
+
+async function enterSleep() {
   state.screen = "sleep";
   if (state.backendConnected) {
     state.activeSession = await api.startSleep(state.plan?.targetDate ?? tomorrowKey());
+  } else {
+    state.activeSession = {
+      id: null,
+      targetDate: state.plan?.targetDate ?? tomorrowKey(),
+      status: "sleeping",
+      startedAt: new Date().toISOString(),
+    };
   }
 }
 
@@ -220,12 +275,20 @@ async function endSleep() {
   state.screen = "checkin";
 }
 
-async function saveFeedback() {
-  const entry = {
+function saveMorning() {
+  state.pendingFeedback = {
     date: state.activeSession?.targetDate ?? dateKey(new Date()),
     actualSleep: state.checkin.actualSleep,
     actualWake: state.checkin.actualWake,
     freshness: Number(state.checkin.freshness),
+  };
+  state.screen = "report";
+  showToast("아침 기록을 저장했어요. 낮 졸림은 오늘 밤에 물어볼게요.");
+}
+
+async function saveDaytime() {
+  const entry = {
+    ...state.pendingFeedback,
     sleepiness: Number(state.checkin.sleepiness),
     failureReason: "",
   };
@@ -238,9 +301,13 @@ async function saveFeedback() {
     state.feedback = [entry, ...(state.feedback ?? []).filter((item) => item.date !== entry.date)];
     state.activeSession = null;
   }
+  state.pendingFeedback = null;
   state.routine = { sound: false, breathe: false, journal: false };
-  state.screen = "report";
-  showToast("오늘 기록을 저장했어요.");
+  const shouldStartSleep = state.pendingSleepStart;
+  state.pendingSleepStart = false;
+  if (shouldStartSleep) await enterSleep();
+  else state.screen = "report";
+  showToast("낮 컨디션까지 기록했어요.");
 }
 
 app.addEventListener("click", async (event) => {
@@ -253,7 +320,9 @@ app.addEventListener("click", async (event) => {
     else if (button.dataset.companion) state.companion = button.dataset.companion;
     else if (button.dataset.complete !== undefined) await completeOnboarding();
     else if (button.dataset.endSleep !== undefined) await endSleep();
-    else if (button.dataset.saveFeedback !== undefined) await saveFeedback();
+    else if (button.dataset.saveMorning !== undefined) saveMorning();
+    else if (button.dataset.saveDaytime !== undefined) await saveDaytime();
+    else if (button.dataset.sleepiness) state.checkin.sleepiness = Number(button.dataset.sleepiness);
     else if (button.dataset.screen === "sleep") await startSleep();
     else if (button.dataset.screen) state.screen = button.dataset.screen;
     else if (button.dataset.routine) {
