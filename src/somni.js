@@ -1,5 +1,18 @@
+import { createCommunity } from "./community/index.mjs";
+import {
+  createCommunityViewState,
+  handleCommunityClick,
+  handleCommunityInput,
+  handleCommunitySubmit,
+  renderCommunity,
+} from "./community/ui.mjs";
+
 const app = document.querySelector("#app");
 const storeKey = "somni-prototype-v1";
+
+// 게시판 상태는 somni의 state와 별도로 관리한다. 저장소가 다르고, app.js와도 공유하기 때문이다.
+const community = createCommunity();
+const communityView = createCommunityViewState();
 
 const companions = {
   cat: { name: "Momo", ko: "모모", label: "포근한 휴식", species: "고양이", row: 0 },
@@ -13,7 +26,7 @@ const initial = {
 };
 let state = { ...initial, ...JSON.parse(localStorage.getItem(storeKey) || "{}") };
 let toastTimer;
-const icon = (name) => ({ home: "⌂", routine: "◌", report: "⌁", settings: "⚙", arrow: "→", check: "✓", moon: "☾", play: "▷", back: "‹", sound: "♬", breathe: "◌", journal: "✦", alarm: "◷" }[name] || "•");
+const icon = (name) => ({ home: "⌂", routine: "◌", report: "⌁", settings: "⚙", arrow: "→", check: "✓", moon: "☾", play: "▷", back: "‹", sound: "♬", breathe: "◌", journal: "✦", alarm: "◷", community: "☰" }[name] || "•");
 function persist() { localStorage.setItem(storeKey, JSON.stringify(state)); }
 function character(kind = state.companion, emotion = "yawning", size = "") {
   const c = companions[kind];
@@ -22,7 +35,7 @@ function character(kind = state.companion, emotion = "yawning", size = "") {
   return `<span class="companion ${size}" style="--x:${x};--y:${y}" role="img" aria-label="${c.species} 캐릭터 ${c.ko}"></span>`;
 }
 function shell(content) {
-  const tabs = [["home", "home", "홈"], ["routine", "routine", "루틴"], ["report", "report", "리포트"], ["settings", "settings", "설정"]];
+  const tabs = [["home", "home", "홈"], ["routine", "routine", "루틴"], ["community", "community", "커뮤니티"], ["report", "report", "리포트"], ["settings", "settings", "설정"]];
   return `<main class="phone" aria-label="Somni 수면 앱"><div class="safe-top"><span>9:41</span><span>● ● ●</span></div>${content}
     <nav class="tabbar" aria-label="메인 메뉴">${tabs.map(([id, i, label]) => `<button data-screen="${id}" class="${state.screen === id ? "active" : ""}"><i>${icon(i)}</i><span>${label}</span></button>`).join("")}</nav></main>`;
 }
@@ -57,9 +70,15 @@ function settings() {
   return shell(`<section class="page settings-page"><header><span class="eyebrow">SETTINGS</span><h1>내 밤의 설정</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>${c.ko}와 함께하는 밤</b><p>${c.label}</p></div><button data-reset-companion>변경</button></section><section class="setting-group"><span>수면 목표</span><button><b>취침 시간</b><em>${state.bedtime}</em></button><button><b>기상 시간</b><em>${state.wake}</em></button></section><section class="setting-group"><span>알림</span><button><b>취침 루틴 알림</b><em class="toggle on"></em></button><button><b>기상 알림</b><em class="toggle on"></em></button></section><section class="setting-group"><span>화면</span><button><b>다크 모드</b><em class="toggle on"></em></button></section></section>`);
 }
 function sleep() { return `<main class="sleep-screen"><div class="safe-top"><span>11:28</span><span>● ● ●</span></div><button class="close-sleep" data-screen="home">×</button><div class="sleep-orbit"></div>${character(state.companion, "sleeping", "sleep-art")}<span class="eyebrow">SLEEP MODE</span><h1>편안한 밤 보내요.</h1><p>알림은 ${state.wake}에 울릴 거예요.</p><div class="now-playing"><i>${icon("sound")}</i><span><b>Gentle Rain</b><small>수면 사운드 · 재생 중</small></span><button>Ⅱ</button></div><button class="sleep-end" data-screen="home">수면 모드 종료</button></main>`; }
-function render() { if (!state.onboarding) onboarding(); else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, report, settings }[state.screen] || home)(); }
+function communityPage() { return shell(`<section class="page community-page">${renderCommunity(community, communityView)}</section>`); }
+function render() { if (!state.onboarding) onboarding(); else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, community: communityPage, report, settings }[state.screen] || home)(); }
 function showToast(message) { const el = document.createElement("div"); el.className = "toast"; el.textContent = message; document.body.append(el); clearTimeout(toastTimer); toastTimer = setTimeout(() => el.remove(), 1800); }
-app.addEventListener("click", (event) => { const t = event.target.closest("button"); if (!t) return;
+app.addEventListener("click", async (event) => {
+  // 게시판은 button이 아닌 요소(글 카드)도 누를 수 있어서 아래 button 검사보다 먼저 물어본다.
+  const board = await handleCommunityClick(event, { community, view: communityView, confirm: (message) => window.confirm(message) });
+  if (board.handled) { if (board.toast) showToast(board.toast); render(); return; }
+
+  const t = event.target.closest("button"); if (!t) return;
   if (t.dataset.next !== undefined) { state.step += 1; }
   else if (t.dataset.prev !== undefined) { state.step -= 1; }
   else if (t.dataset.companion) { state.companion = t.dataset.companion; }
@@ -69,4 +88,19 @@ app.addEventListener("click", (event) => { const t = event.target.closest("butto
   else if (t.dataset.resetCompanion !== undefined) { state.onboarding = false; state.step = 1; }
   else return; persist(); render(); });
 document.addEventListener("change", (event) => { if (event.target.dataset.time) { state[event.target.dataset.time] = event.target.value; persist(); } });
-render();
+document.addEventListener("submit", async (event) => {
+  const board = await handleCommunitySubmit(event, { community, view: communityView });
+  if (!board.handled) return;
+  if (board.toast) showToast(board.toast);
+  render();
+});
+// 검색은 글자마다 다시 그리므로 입력 위치를 되돌려 준다.
+document.addEventListener("input", (event) => {
+  if (!handleCommunityInput(event, { view: communityView }).handled) return;
+  render();
+  const search = app.querySelector('[data-cm-input="query"]');
+  if (!search) return;
+  search.focus();
+  search.setSelectionRange(search.value.length, search.value.length);
+});
+community.load().catch(() => {}).finally(render);
