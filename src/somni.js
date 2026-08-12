@@ -25,6 +25,10 @@ const initial = {
   feedback: [],
   activeSession: null,
   backendConnected: false,
+  calendarConnections: {
+    apple: { connected: false, syncMode: "manual", lastSyncedAt: null },
+    google: { connected: false, syncMode: "manual", lastSyncedAt: null },
+  },
 };
 
 function loadLocalState() {
@@ -34,8 +38,14 @@ function loadLocalState() {
 
 let state = { ...initial, ...loadLocalState() };
 state.checkin = { ...initial.checkin, ...state.checkin };
+state.calendarConnections = {
+  apple: { ...initial.calendarConnections.apple, ...state.calendarConnections?.apple },
+  google: { ...initial.calendarConnections.google, ...state.calendarConnections?.google },
+};
 let toastTimer;
-const icon = (name) => ({ home: "⌂", routine: "◌", report: "⌁", settings: "⚙", arrow: "→", check: "✓", moon: "☾", play: "▷", back: "‹", sound: "♬", breathe: "◌", journal: "✦", alarm: "◷" }[name] || "•");
+let calendarSyncing = false;
+let lastAutomaticSync = 0;
+const icon = (name) => ({ home: "⌂", routine: "◌", report: "⌁", settings: "⚙", arrow: "→", check: "✓", moon: "☾", play: "▷", back: "‹", sound: "♬", breathe: "◌", journal: "✦", alarm: "◷", refresh: "↻" }[name] || "•");
 
 function persist() {
   localStorage.setItem(storeKey, JSON.stringify(state));
@@ -101,6 +111,12 @@ function applyProfile(data) {
   state.onboarding = Boolean(data.onboardingComplete);
   state.name = data.profile?.name || state.name;
   state.wake = data.profile?.targetWake || state.wake;
+  for (const provider of ["apple", "google"]) {
+    state.calendarConnections[provider] = {
+      ...state.calendarConnections[provider],
+      ...(data.calendarConnections?.[provider] ?? {}),
+    };
+  }
 }
 
 async function refreshPlan() {
@@ -128,6 +144,7 @@ async function loadBackend() {
     }
     persist();
     render();
+    await syncCalendars("auto", { quiet: true });
   } catch (error) {
     state.backendConnected = false;
     if (error.status === 401 && error.loginUrl) {
@@ -207,7 +224,50 @@ function daytimeCheckin() {
 
 function settings() {
   const c = companions[state.companion];
-  return shell(`<section class="page settings-page"><header><span class="eyebrow">SETTINGS</span><h1>내 밤의 설정</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>${c.ko}와 함께하는 밤</b><p>${state.backendConnected ? "계정에 안전하게 동기화 중" : c.label}</p></div><button data-reset-companion>변경</button></section><section class="setting-group"><span>수면 목표</span><button><b>권장 취침 시간</b><em>${state.bedtime}</em></button><button><b>기상 시간</b><em>${state.wake}</em></button></section><section class="setting-group"><span>알림</span><button><b>취침 루틴 알림</b><em class="toggle on"></em></button><button><b>기상 알림</b><em class="toggle on"></em></button></section><section class="setting-group"><span>계정</span>${state.backendConnected ? `<button><b>서버 동기화</b><em>연결됨</em></button>` : `<button data-login><b>Google·Apple 로그인</b><em>${icon("arrow")}</em></button>`}</section></section>`);
+  return shell(`<section class="page settings-page"><header><span class="eyebrow">SETTINGS</span><h1>내 밤의 설정</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>${c.ko}와 함께하는 밤</b><p>${state.backendConnected ? "계정에 안전하게 동기화 중" : c.label}</p></div><button data-reset-companion>변경</button></section><section class="setting-group"><span>수면 목표</span><button><b>권장 취침 시간</b><em>${state.bedtime}</em></button><button><b>기상 시간</b><em>${state.wake}</em></button></section><section class="setting-group calendar-group"><span>캘린더 동기화</span>${calendarSetting("apple", "Apple Calendar", "iPhone 일정")}${calendarSetting("google", "Google Calendar", "학교·개인 일정")}<button class="calendar-sync-button" data-sync-calendars><b>${icon("refresh")} 지금 동기화</b><em>변경 일정 확인</em></button><p class="calendar-help">자동 모드는 앱을 열거나 다시 돌아올 때 변경된 일정을 확인해 수면 계획에 반영해요.</p></section><section class="setting-group"><span>알림</span><button><b>취침 루틴 알림</b><em class="toggle on"></em></button><button><b>기상 알림</b><em class="toggle on"></em></button></section><section class="setting-group"><span>계정</span>${state.backendConnected ? `<button><b>서버 동기화</b><em>연결됨</em></button>` : `<button data-login><b>Google·Apple 로그인</b><em>${icon("arrow")}</em></button>`}</section></section>`);
+}
+
+function calendarSetting(provider, label, description) {
+  const connection = state.calendarConnections[provider];
+  const lastSync = connection.lastSyncedAt
+    ? new Date(connection.lastSyncedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "아직 동기화하지 않음";
+  return `<article class="calendar-provider"><span class="calendar-mark ${provider}">${provider === "apple" ? "●" : "G"}</span><span class="calendar-copy"><b>${label}</b><small>${connection.connected ? lastSync : description}</small></span><button class="calendar-connect ${connection.connected ? "connected" : ""}" data-calendar-connect="${provider}">${connection.connected ? "연결됨" : "연결"}</button>${connection.connected ? `<label class="sync-mode"><input type="checkbox" data-calendar-auto="${provider}" ${connection.syncMode === "auto" ? "checked" : ""}><span>자동</span></label>` : ""}</article>`;
+}
+
+function requestAppleDeviceSync(reason = "manual") {
+  const handler = globalThis.webkit?.messageHandlers?.somniCalendarSync;
+  if (!handler?.postMessage) return false;
+  handler.postMessage({ reason });
+  return true;
+}
+
+async function syncCalendars(mode = "manual", { quiet = false } = {}) {
+  if (!state.backendConnected || calendarSyncing) return;
+  const active = Object.entries(state.calendarConnections).filter(([, item]) => item.connected && (mode === "manual" || item.syncMode === "auto"));
+  if (!active.length) {
+    if (!quiet) showToast("먼저 동기화할 캘린더를 연결해 주세요.");
+    return;
+  }
+  calendarSyncing = true;
+  try {
+    const appleRequested = active.some(([provider]) => provider === "apple") && requestAppleDeviceSync(mode);
+    const result = await api.syncCalendars(mode);
+    const profile = await api.me();
+    applyProfile(profile);
+    await refreshPlan();
+    lastAutomaticSync = Date.now();
+    persist();
+    render();
+    if (!quiet) {
+      if (result.appleDeviceSyncRequired && !appleRequested && !result.results?.length) showToast("Apple 일정은 iPhone 앱에서 캘린더 권한을 허용해 주세요.");
+      else showToast("변경된 일정을 확인하고 계획을 업데이트했어요.");
+    }
+  } catch (error) {
+    if (!quiet) showToast(error.message);
+  } finally {
+    calendarSyncing = false;
+  }
 }
 
 function sleep() {
@@ -322,6 +382,15 @@ app.addEventListener("click", async (event) => {
     else if (button.dataset.endSleep !== undefined) await endSleep();
     else if (button.dataset.saveMorning !== undefined) saveMorning();
     else if (button.dataset.saveDaytime !== undefined) await saveDaytime();
+    else if (button.dataset.syncCalendars !== undefined) await syncCalendars("manual");
+    else if (button.dataset.calendarConnect) {
+      const provider = button.dataset.calendarConnect;
+      const current = state.calendarConnections[provider];
+      const updated = await api.updateCalendar(provider, !current.connected, current.syncMode);
+      state.calendarConnections[provider] = { ...current, ...updated };
+      if (updated.connected && provider === "apple") requestAppleDeviceSync("connect");
+      showToast(`${provider === "apple" ? "Apple" : "Google"} Calendar ${updated.connected ? "연결 설정을 저장했어요." : "연결을 해제했어요."}`);
+    }
     else if (button.dataset.sleepiness) state.checkin.sleepiness = Number(button.dataset.sleepiness);
     else if (button.dataset.screen === "sleep") await startSleep();
     else if (button.dataset.screen) state.screen = button.dataset.screen;
@@ -355,7 +424,39 @@ document.addEventListener("change", (event) => {
     state.checkin[event.target.dataset.checkin] = event.target.value;
     persist();
   }
+  if (event.target.dataset.calendarAuto) {
+    const provider = event.target.dataset.calendarAuto;
+    const connection = state.calendarConnections[provider];
+    const syncMode = event.target.checked ? "auto" : "manual";
+    api.updateCalendar(provider, true, syncMode).then((updated) => {
+      state.calendarConnections[provider] = { ...connection, ...updated };
+      persist();
+      render();
+      showToast(syncMode === "auto" ? "일정 변경을 자동으로 확인할게요." : "수동 동기화로 변경했어요.");
+      if (syncMode === "auto") syncCalendars("auto", { quiet: true });
+    }).catch((error) => showToast(error.message));
+  }
 });
+
+globalThis.somniCalendarEventsChanged = async (events = [], deletedIds = []) => {
+  try {
+    const result = await api.pushAppleCalendarEvents(events, deletedIds);
+    state.calendarConnections.apple = { ...state.calendarConnections.apple, connected: true, lastSyncedAt: result.lastSyncedAt };
+    await refreshPlan();
+    persist();
+    render();
+    showToast("Apple Calendar 변경 사항을 반영했어요.");
+    return result;
+  } catch (error) {
+    showToast(error.message);
+    throw error;
+  }
+};
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() - lastAutomaticSync > 60_000) syncCalendars("auto", { quiet: true });
+});
+globalThis.setInterval(() => syncCalendars("auto", { quiet: true }), 5 * 60_000);
 
 render();
 loadBackend();

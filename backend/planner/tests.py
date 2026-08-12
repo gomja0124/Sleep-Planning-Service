@@ -106,6 +106,38 @@ class PlannerApiIntegrationTests(TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertIn("Google 로그인", response.json()["detail"])
 
+    def test_calendar_sync_mode_is_saved_and_exposed(self):
+        response = self.json_request("put", "/api/v1/calendars/apple/", {
+            "connected": True,
+            "syncMode": "auto",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["syncMode"], "auto")
+        profile = self.client.get("/api/v1/me/").json()
+        self.assertTrue(profile["calendarConnections"]["apple"]["connected"])
+        self.assertEqual(profile["calendarConnections"]["apple"]["syncMode"], "auto")
+
+    def test_automatic_sync_ignores_manual_connections(self):
+        self.json_request("put", "/api/v1/calendars/google/", {
+            "connected": True,
+            "syncMode": "manual",
+        })
+
+        response = self.json_request("post", "/api/v1/calendars/sync/", {"mode": "auto"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"], [])
+        self.assertFalse(response.json()["appleDeviceSyncRequired"])
+
+    def test_invalid_calendar_sync_mode_is_rejected(self):
+        response = self.json_request("put", "/api/v1/calendars/apple/", {
+            "connected": True,
+            "syncMode": "sometimes",
+        })
+
+        self.assertEqual(response.status_code, 400)
+
 
 @override_settings(ALLOW_DEMO_USER=False)
 class PlannerAuthenticationTests(TestCase):

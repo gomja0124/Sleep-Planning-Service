@@ -45,6 +45,7 @@ class CalendarConnection(models.Model):
     provider = models.CharField(max_length=10, choices=[("apple", "Apple"), ("google", "Google")])
     selected_calendar_id = models.CharField(max_length=255, default="primary")
     sync_token = models.TextField(blank=True)
+    sync_mode = models.CharField(max_length=8, choices=[("manual", "Manual"), ("auto", "Automatic")], default="manual")
     connected = models.BooleanField(default=False)
     last_synced_at = models.DateTimeField(null=True, blank=True)
 

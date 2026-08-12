@@ -52,7 +52,7 @@ def schedule_data(item):
 
 
 def profile_data(profile):
-    calendars = {item.provider: {"connected": item.connected, "selectedCalendarId": item.selected_calendar_id, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None} for item in profile.calendar_connections.all()}
+    calendars = {item.provider: {"connected": item.connected, "selectedCalendarId": item.selected_calendar_id, "syncMode": item.sync_mode, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None} for item in profile.calendar_connections.all()}
     return {"id": profile.external_id, "selectedCharacter": profile.selected_character, "onboardingComplete": profile.onboarding_complete, "profile": {"name": profile.name, "targetWake": time_string(profile.target_wake), "targetSleepMinutes": profile.target_sleep_minutes, "latencyMinutes": profile.latency_minutes, "routineMinutes": profile.routine_minutes, "adaptationWeek": profile.adaptation_week}, "settings": {"timeFormat": profile.time_format}, "alertSettings": profile.alert_settings, "community": {"points": profile.points, "groupStreak": profile.group_streak}, "calendarConnections": calendars}
 
 
@@ -211,23 +211,39 @@ def sleep_session_detail(request, session_id):
 def calendar_connection(request, provider):
     if provider not in {"apple", "google"}: return error("지원하지 않는 캘린더입니다.", 404)
     profile = profile_for(request)
-    try: connected = bool(payload(request)["connected"])
+    try:
+        data = payload(request)
+        connected = bool(data["connected"])
+        sync_mode = data.get("syncMode", "manual")
+        if sync_mode not in {"manual", "auto"}:
+            return error("syncMode는 manual 또는 auto여야 합니다.")
     except (KeyError, ValueError) as exc: return error(str(exc))
-    item, _ = CalendarConnection.objects.update_or_create(profile=profile, provider=provider, defaults={"connected": connected, "last_synced_at": timezone.now() if connected else None})
-    return JsonResponse({"provider": provider, "connected": item.connected, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None})
+    item, _ = CalendarConnection.objects.update_or_create(profile=profile, provider=provider, defaults={"connected": connected, "sync_mode": sync_mode})
+    return JsonResponse({"provider": provider, "connected": item.connected, "syncMode": item.sync_mode, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None})
 
 
 @require_http_methods(["POST"])
 def sync_calendars(request):
     profile = profile_for(request)
+    try:
+        mode = payload(request).get("mode", "manual")
+    except ValueError as exc:
+        return error(str(exc))
+    if mode not in {"manual", "auto"}:
+        return error("mode는 manual 또는 auto여야 합니다.")
     results = []
     google = profile.calendar_connections.filter(provider="google", connected=True).first()
+    if google and mode == "auto" and google.sync_mode != "auto":
+        google = None
     if google:
         try:
             results.append(sync_google_calendar(profile, google.selected_calendar_id))
         except CalendarIntegrationError as exc:
             return error(exc.detail, exc.status)
-    apple = profile.calendar_connections.filter(provider="apple", connected=True).exists()
+    apple_query = profile.calendar_connections.filter(provider="apple", connected=True)
+    if mode == "auto":
+        apple_query = apple_query.filter(sync_mode="auto")
+    apple = apple_query.exists()
     return JsonResponse({
         "results": results,
         "appleDeviceSyncRequired": apple,
