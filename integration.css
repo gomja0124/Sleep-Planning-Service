@@ -333,6 +333,74 @@
   line-height: 1.55;
 }
 
+.analysis-card {
+  margin: 2px 0 26px;
+  padding: 17px;
+  border: 1px solid rgba(179, 161, 255, 0.2);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(179, 161, 255, 0.11), rgba(168, 230, 208, 0.06));
+}
+
+.analysis-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analysis-card b {
+  font-size: 14px;
+}
+
+.analysis-card em {
+  color: var(--mint);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.analysis-card p,
+.analysis-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.analysis-card small {
+  color: var(--lav);
+  font-weight: 700;
+}
+
+.nap-check {
+  margin-top: 24px;
+}
+
+.nap-check > span small {
+  margin-left: 4px;
+  color: var(--lav);
+  font-size: 8px;
+}
+
+.minute-input {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.minute-input input {
+  width: 76px;
+  min-width: 76px;
+  text-align: right;
+}
+
+.minute-input em {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
 .sleepiness-scale {
   display: grid;
   grid-template-columns: 42px repeat(5, 1fr) 42px;

@@ -31,6 +31,7 @@ npm run test:all
 | `GET` | `/api/v1/plans/?start=YYYY-MM-DD&days=7` | 일정·피드백 기반 수면 계획 |
 | `PUT` | `/api/v1/plans/{date}/override/` | 불 끄기 시각 조절 및 계획 저장 |
 | `GET`, `POST` | `/api/v1/feedback/` | 기상 후 수면·컨디션 기록 |
+| `GET` | `/api/v1/sleep-analysis/` | 최근 5~7회 기록 기반 수면 패턴·목표 분석 |
 | `GET`, `POST` | `/api/v1/sleep-sessions/` | 수면 시작/Live Activity 상태 |
 | `PATCH` | `/api/v1/sleep-sessions/{id}/` | 알람·기상 체크 상태 전환 |
 | `PUT` | `/api/v1/calendars/apple/`, `/google/` | 캘린더 연결 상태 |
@@ -42,6 +43,8 @@ npm run test:all
 | `GET`, `POST` | `/api/v1/community/posts/` | 커뮤니티 게시글 |
 
 `GET /api/v1/plans/` 응답에는 권장 취침 구간, 취침 준비·불 끄기·기상 알림, 추천 근거, 피드백 반영분과 수동 조절값이 함께 포함됩니다.
+
+수면 분석은 최근 7회를 요약하고 최근 5회로 규칙을 판정합니다. 현재 목표를 달성했는데도 컨디션 저하가 3회 이상 반복될 때만 60분, 30분, 15분 단계로 목표를 탐색하며 최대 540분으로 제한합니다. 새 목표는 3회의 추가 기록이 쌓일 때까지 다시 조정하지 않습니다.
 
 Google 연동에는 OAuth 동의 화면에서 `calendar.readonly` 권한과 오프라인 접근 토큰이 필요합니다. Apple Calendar는 웹 서버가 iCloud에 직접 접근하지 않고, iOS 앱의 EventKit이 읽은 이벤트를 `/api/v1/calendars/apple/events/`로 전달하는 구조입니다. 종일 일정은 정확한 시작 시각이 없어 수면 계획 입력에서 제외됩니다.
 

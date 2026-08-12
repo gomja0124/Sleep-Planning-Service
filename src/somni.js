@@ -18,11 +18,12 @@ const initial = {
   wake: "07:30",
   screen: "home",
   routine: { sound: false, breathe: false, journal: false },
-  checkin: { actualSleep: "23:30", actualWake: "07:30", freshness: 3, sleepiness: 3 },
+  checkin: { actualSleep: "23:30", actualWake: "07:30", freshness: 3, sleepiness: 3, sleepOnsetDelayMinutes: "", napDurationMinutes: "", napReason: "" },
   pendingFeedback: null,
   pendingSleepStart: false,
   plan: null,
   feedback: [],
+  sleepAnalysis: null,
   activeSession: null,
   backendConnected: false,
   authResolved: false,
@@ -139,6 +140,7 @@ function resetSignedOutState() {
   state.pendingSleepStart = false;
   state.plan = null;
   state.feedback = [];
+  state.sleepAnalysis = null;
   state.activeSession = null;
   state.calendarConnections = {
     apple: { ...initial.calendarConnections.apple },
@@ -149,6 +151,7 @@ function resetSignedOutState() {
 async function refreshPlan() {
   const data = await api.plans(tomorrowKey(), 7);
   state.plan = data.results?.[0] ?? null;
+  state.sleepAnalysis = data.analysis ?? state.sleepAnalysis;
   if (state.plan?.bedtimeCenter) state.bedtime = state.plan.bedtimeCenter;
 }
 
@@ -170,6 +173,7 @@ async function loadBackend() {
       if (state.plan?.bedtimeCenter) state.bedtime = state.plan.bedtimeCenter;
       state.activeSession = sessions.results?.find((item) => !["complete", "idle"].includes(item.status)) ?? null;
       state.feedback = feedback.results ?? [];
+      state.sleepAnalysis = feedback.analysis ?? plans.analysis ?? null;
       if (state.activeSession?.status === "sleeping") state.screen = "sleep";
     }
     persist();
@@ -257,15 +261,18 @@ function report() {
     : latest
       ? `개운함 ${latest.freshness}/5 · 낮 졸림 ${latest.sleepiness}/5`
       : "첫 수면 기록을 남기면 나만의 변화가 여기에 쌓여요.";
-  return shell(`<section class="page report-page"><header><div><span class="eyebrow">SLEEP REPORT</span><h1>지난밤의<br>편안한 기록.</h1></div>${character(state.companion, "sleeping", "header-art")}</header><section class="report-card"><span>${displayedRecord?.date ?? "최근 기록"}</span><div><strong>${hours}<small>h</small> ${mins}<small>m</small></strong><p>수면 시간</p></div><div class="sleep-bar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>${actualSleep} 취침 <b>·</b> ${actualWake} 기상</small></section><section class="feedback"><span class="soft-icon">✦</span><div><b>${state.pendingFeedback ? "아침 기록을 임시 저장했어요." : "조금씩 내 리듬에 가까워지고 있어요."}</b><p>${pendingCopy}</p></div></section><section class="section-title"><div><span class="eyebrow">THIS WEEK</span><h2>나의 수면 리듬</h2></div><button>7일</button></section><div class="chart">${[58, 72, 48, 80, 64, 88, 70].map((height, index) => `<span><i style="height:${height}%"></i><small>${"M T W T F S S".split(" ")[index]}</small></span>`).join("")}</div></section>`);
+  const analysis = state.sleepAnalysis;
+  const analysisLabel = ({ INSUFFICIENT_DATA: "기록을 모으는 중", INSUFFICIENT_SLEEP: "수면 시간 확보 필요", LOW_CONDITION_DESPITE_DURATION: "목표 수면 탐색 중", IRREGULAR_TIMING: "취침 리듬 안정화", STABLE: "안정적인 수면 리듬", NO_CLEAR_PATTERN: "패턴 관찰 중" })[analysis?.primaryState] ?? "나의 리듬 분석 중";
+  const analysisReason = analysis?.reasons?.[0]?.message ?? "3번 이상 기록하면 수면 패턴을 분석해요.";
+  return shell(`<section class="page report-page"><header><div><span class="eyebrow">SLEEP REPORT</span><h1>지난밤의<br>편안한 기록.</h1></div>${character(state.companion, "sleeping", "header-art")}</header><section class="report-card"><span>${displayedRecord?.date ?? "최근 기록"}</span><div><strong>${hours}<small>h</small> ${mins}<small>m</small></strong><p>수면 시간</p></div><div class="sleep-bar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>${actualSleep} 취침 <b>·</b> ${actualWake} 기상</small></section><section class="feedback"><span class="soft-icon">✦</span><div><b>${state.pendingFeedback ? "아침 기록을 임시 저장했어요." : "조금씩 내 리듬에 가까워지고 있어요."}</b><p>${pendingCopy}</p></div></section><section class="analysis-card"><span class="eyebrow">PERSONAL ANALYSIS</span><div><b>${analysisLabel}</b><em>${analysis?.confidence ? `신뢰도 ${analysis.confidence.toUpperCase()}` : "LEARNING"}</em></div><p>${analysisReason}</p>${analysis?.suggestedAdjustmentMinutes ? `<small>다음 목표 수면을 ${analysis.suggestedAdjustmentMinutes}분 늘려 탐색해요.</small>` : ""}</section><section class="section-title"><div><span class="eyebrow">THIS WEEK</span><h2>나의 수면 리듬</h2></div><button>7일</button></section><div class="chart">${[58, 72, 48, 80, 64, 88, 70].map((height, index) => `<span><i style="height:${height}%"></i><small>${"M T W T F S S".split(" ")[index]}</small></span>`).join("")}</div></section>`);
 }
 
 function checkin() {
-  return shell(`<section class="page settings-page"><header><span class="eyebrow">MORNING CHECK-IN</span><h1>오늘 아침은<br>어떤가요?</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>지금 느끼는 것만 기록해요.</b><p>낮 졸림은 오늘 밤 잠들기 전에 물어볼게요.</p></div></section><section class="setting-group"><span>지난밤 기록</span><label><b>실제 취침 시각</b><input type="time" data-checkin="actualSleep" value="${state.checkin.actualSleep}"></label><label><b>실제 기상 시각</b><input type="time" data-checkin="actualWake" value="${state.checkin.actualWake}"></label></section><section class="setting-group"><span>아침 컨디션</span><label><b>지금 얼마나 개운한가요?</b><select data-checkin="freshness">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(state.checkin.freshness) === value ? "selected" : ""}>${value} / 5</option>`).join("")}</select></label></section><p class="timing-note">낮 시간 졸림은 하루를 충분히 보낸 후 평가해야 더 정확해요.</p><button class="primary sleep-button" data-save-morning>${icon("check")} 아침 기록 저장</button></section>`);
+  return shell(`<section class="page settings-page"><header><span class="eyebrow">MORNING CHECK-IN</span><h1>오늘 아침은<br>어떤가요?</h1></header><section class="profile-card">${character(state.companion, "yawning", "profile-art")}<div><b>지금 느끼는 것만 기록해요.</b><p>낮 졸림은 오늘 밤 잠들기 전에 물어볼게요.</p></div></section><section class="setting-group"><span>지난밤 기록</span><label><b>실제 취침 시각</b><input type="time" data-checkin="actualSleep" value="${state.checkin.actualSleep}"></label><label><b>실제 기상 시각</b><input type="time" data-checkin="actualWake" value="${state.checkin.actualWake}"></label><label><b>잠들기까지 걸린 시간</b><select data-checkin="sleepOnsetDelayMinutes"><option value="" ${state.checkin.sleepOnsetDelayMinutes === "" ? "selected" : ""}>기억나지 않음</option>${[[0, "거의 바로"], [20, "10~30분"], [45, "30~60분"], [60, "60분 이상"]].map(([value, label]) => `<option value="${value}" ${state.checkin.sleepOnsetDelayMinutes !== "" && Number(state.checkin.sleepOnsetDelayMinutes) === value ? "selected" : ""}>${label}</option>`).join("")}</select></label></section><section class="setting-group"><span>아침 컨디션</span><label><b>지금 얼마나 개운한가요?</b><select data-checkin="freshness">${[1, 2, 3, 4, 5].map((value) => `<option value="${value}" ${Number(state.checkin.freshness) === value ? "selected" : ""}>${value} / 5</option>`).join("")}</select></label></section><p class="timing-note">낮 시간 졸림은 하루를 충분히 보낸 후 평가해야 더 정확해요.</p><button class="primary sleep-button" data-save-morning>${icon("check")} 아침 기록 저장</button></section>`);
 }
 
 function daytimeCheckin() {
-  return shell(`<section class="page settings-page daytime-checkin"><header><span class="eyebrow">BEFORE BED CHECK-IN</span><h1>오늘 낮에는<br>얼마나 졸렸나요?</h1></header><section class="profile-card">${character(state.companion, "tired", "profile-art")}<div><b>하루를 돌아볼 시간이에요.</b><p>지난밤 수면이 낮 컨디션에 미친 영향을 기록해요.</p></div></section><section class="sleepiness-scale" role="radiogroup" aria-label="낮 시간 졸림"><span>거의<br>안 졸림</span>${[1, 2, 3, 4, 5].map((value) => `<button data-sleepiness="${value}" class="${Number(state.checkin.sleepiness) === value ? "selected" : ""}" aria-pressed="${Number(state.checkin.sleepiness) === value}">${value}</button>`).join("")}<span>매우<br>졸림</span></section><p class="timing-note">이 답변을 지난밤 기록에 합친 뒤 오늘의 수면 모드를 시작할게요.</p><button class="primary sleep-button" data-save-daytime>${icon("moon")} 평가하고 수면 시작</button></section>`);
+  return shell(`<section class="page settings-page daytime-checkin"><header><span class="eyebrow">BEFORE BED CHECK-IN</span><h1>오늘 낮에는<br>얼마나 졸렸나요?</h1></header><section class="profile-card">${character(state.companion, "tired", "profile-art")}<div><b>하루를 돌아볼 시간이에요.</b><p>지난밤 수면이 낮 컨디션에 미친 영향을 기록해요.</p></div></section><section class="sleepiness-scale" role="radiogroup" aria-label="낮 시간 졸림"><span>거의<br>안 졸림</span>${[1, 2, 3, 4, 5].map((value) => `<button data-sleepiness="${value}" class="${Number(state.checkin.sleepiness) === value ? "selected" : ""}" aria-pressed="${Number(state.checkin.sleepiness) === value}">${value}</button>`).join("")}<span>매우<br>졸림</span></section><section class="setting-group nap-check"><span>낮잠 기록 <small>선택</small></span><label><b>낮잠 시간</b><span class="minute-input"><input type="number" min="0" max="240" step="5" inputmode="numeric" data-checkin="napDurationMinutes" value="${state.checkin.napDurationMinutes}" placeholder="0"><em>분</em></span></label><label><b>낮잠을 잔 이유</b><select data-checkin="napReason"><option value="">해당 없음</option>${["졸려서", "전날 잠이 부족해서", "습관적으로", "휴식하려고", "기타"].map((reason) => `<option ${state.checkin.napReason === reason ? "selected" : ""}>${reason}</option>`).join("")}</select></label></section><p class="timing-note">이 답변을 지난밤 기록에 합친 뒤 오늘의 수면 모드를 시작할게요.</p><button class="primary sleep-button" data-save-daytime>${icon("moon")} 평가하고 수면 시작</button></section>`);
 }
 
 function settings() {
@@ -389,6 +396,7 @@ function saveMorning() {
     actualSleep: state.checkin.actualSleep,
     actualWake: state.checkin.actualWake,
     freshness: Number(state.checkin.freshness),
+    sleepOnsetDelayMinutes: state.checkin.sleepOnsetDelayMinutes === "" ? null : Number(state.checkin.sleepOnsetDelayMinutes),
   };
   state.screen = "report";
   showToast("아침 기록을 저장했어요. 낮 졸림은 오늘 밤에 물어볼게요.");
@@ -398,18 +406,26 @@ async function saveDaytime() {
   const entry = {
     ...state.pendingFeedback,
     sleepiness: Number(state.checkin.sleepiness),
+    napDurationMinutes: state.checkin.napDurationMinutes === "" ? null : Number(state.checkin.napDurationMinutes),
+    napReason: state.checkin.napReason,
     failureReason: "",
   };
   if (state.backendConnected) {
-    await api.saveFeedback(entry);
+    const saved = await api.saveFeedback(entry);
+    state.sleepAnalysis = saved.analysis ?? state.sleepAnalysis;
     if (state.activeSession?.id) state.activeSession = await api.updateSleep(state.activeSession.id, "complete");
-    state.feedback = (await api.feedback()).results ?? [];
+    const feedback = await api.feedback();
+    state.feedback = feedback.results ?? [];
+    state.sleepAnalysis = feedback.analysis ?? state.sleepAnalysis;
     await refreshPlan();
   } else {
     state.feedback = [entry, ...(state.feedback ?? []).filter((item) => item.date !== entry.date)];
     state.activeSession = null;
   }
   state.pendingFeedback = null;
+  state.checkin.sleepOnsetDelayMinutes = "";
+  state.checkin.napDurationMinutes = "";
+  state.checkin.napReason = "";
   state.routine = { sound: false, breathe: false, journal: false };
   const shouldStartSleep = state.pendingSleepStart;
   state.pendingSleepStart = false;
