@@ -1,3 +1,8 @@
+.sky,
+.hero-stars {
+  pointer-events: none;
+}
+
 .setting-group label {
   min-height: 54px;
   border-bottom: 1px solid var(--line);
