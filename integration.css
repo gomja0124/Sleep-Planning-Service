@@ -3,6 +3,47 @@
   pointer-events: none;
 }
 
+.time-sheet label {
+  gap: 14px;
+}
+
+.time-sheet input[type="time"] {
+  width: 142px;
+  min-width: 142px;
+  padding: 3px 0 3px 8px;
+  flex: 0 0 142px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.time-sheet input[type="time"]::-webkit-date-and-time-value {
+  min-width: 102px;
+  margin: 0;
+  text-align: right;
+}
+
+.time-sheet input[type="time"]::-webkit-datetime-edit {
+  min-width: 98px;
+  padding: 0 4px 0 0;
+  overflow: visible;
+  white-space: nowrap;
+}
+
+.time-sheet input[type="time"]::-webkit-datetime-edit-ampm-field {
+  padding-left: 3px;
+}
+
+.time-sheet input[type="time"]::-webkit-calendar-picker-indicator {
+  width: 18px;
+  height: 18px;
+  margin: 0 0 0 6px;
+  padding: 1px;
+  flex: 0 0 18px;
+  opacity: 1;
+  filter: invert(1) brightness(1.8);
+  cursor: pointer;
+}
+
 .auth-screen {
   width: 100%;
   max-width: 402px;
