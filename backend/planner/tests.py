@@ -1,6 +1,10 @@
 import json
 from datetime import date, timedelta
+from unittest.mock import Mock, patch
 
+from allauth.socialaccount.models import SocialAccount
+from allauth.socialaccount.providers.base.constants import AuthProcess
+from django.http import HttpResponseRedirect
 from django.test import TestCase, override_settings
 
 from .models import Profile, Schedule
@@ -106,6 +110,46 @@ class PlannerApiIntegrationTests(TestCase):
 
         self.assertEqual(response.status_code, 409)
         self.assertIn("Google 로그인", response.json()["detail"])
+
+    @override_settings(SOCIAL_LOGIN_CONFIGURED={"google": False, "apple": False}, FRONTEND_ORIGIN="http://localhost:4173")
+    def test_google_calendar_oauth_reports_missing_configuration(self):
+        self.client.get("/api/v1/me/")
+        response = self.client.get("/auth/calendars/google/connect/")
+
+        self.assertRedirects(
+            response,
+            "http://localhost:4173/?calendar=google-config-missing",
+            fetch_redirect_response=False,
+        )
+
+    @override_settings(SOCIAL_LOGIN_CONFIGURED={"google": True, "apple": False}, FRONTEND_ORIGIN="http://localhost:4173")
+    @patch("planner.views.get_social_adapter")
+    def test_google_calendar_oauth_starts_account_connect_flow(self, adapter_factory):
+        self.client.get("/api/v1/me/")
+        provider = Mock()
+        provider.redirect.return_value = HttpResponseRedirect("https://accounts.google.com/o/oauth2/v2/auth")
+        adapter_factory.return_value.get_provider.return_value = provider
+
+        response = self.client.get("/auth/calendars/google/connect/")
+
+        self.assertEqual(response.status_code, 302)
+        provider.redirect.assert_called_once_with(
+            response.wsgi_request,
+            process=AuthProcess.CONNECT,
+            next_url="http://localhost:4173/?calendar=google-connected",
+        )
+
+    @override_settings(SOCIAL_LOGIN_CONFIGURED={"google": True, "apple": False})
+    def test_profile_exposes_google_oauth_authorization_state(self):
+        self.client.get("/api/v1/me/")
+        profile = Profile.objects.get(user__username="demo-user")
+        SocialAccount.objects.create(user=profile.user, provider="google", uid="google-user-1")
+
+        google = self.client.get("/api/v1/me/").json()["calendarConnections"]["google"]
+
+        self.assertTrue(google["authorized"])
+        self.assertTrue(google["oauthConfigured"])
+        self.assertEqual(google["oauthUrl"], "/auth/calendars/google/connect/")
 
     def test_calendar_sync_mode_is_saved_and_exposed(self):
         response = self.json_request("put", "/api/v1/calendars/apple/", {

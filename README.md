@@ -31,6 +31,12 @@ npm run dev
 
 브라우저에서 [http://localhost:4173](http://localhost:4173)을 엽니다.
 
+Google Calendar OAuth를 사용하려면 Google Cloud Console에서 Calendar API를
+활성화하고 OAuth 웹 클라이언트의 승인된 리디렉션 URI에
+`http://localhost:8000/accounts/google/login/callback/`을 등록하세요. 이후
+`.env.example`을 참고해 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`을 서버 환경에
+설정하면 앱 설정 화면의 Google Calendar 연결 버튼이 활성화됩니다.
+
 로컬 개발 환경에서는 `SLEEP_RECORD_TEST_MODE=true`가 기본값입니다. 같은 날짜에
 수면 사이클을 반복해도 기록 날짜를 하루씩 증가시켜 저장하므로, 유효 기록 3건에
 따른 추천 수면 변경을 바로 검증할 수 있습니다. 실제 날짜 기준으로 테스트하려면

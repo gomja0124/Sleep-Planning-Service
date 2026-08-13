@@ -67,4 +67,5 @@ export const api = {
   syncGoogleCalendar: (calendarId = "primary") => request("/api/v1/calendars/google/sync/", { method: "POST", body: JSON.stringify({ calendarId }) }),
   pushAppleCalendarEvents: (events, deletedIds = []) => request("/api/v1/calendars/apple/events/", { method: "PUT", body: JSON.stringify({ events, deletedIds }) }),
   loginUrl: `${API_BASE}/auth/`,
+  googleCalendarOAuthUrl: `${API_BASE}/auth/calendars/google/connect/`,
 };

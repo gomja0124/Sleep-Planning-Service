@@ -7,11 +7,14 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import transaction
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import ensure_csrf_cookie
+from allauth.socialaccount.adapter import get_adapter as get_social_adapter
+from allauth.socialaccount.models import SocialAccount
+from allauth.socialaccount.providers.base.constants import AuthProcess
 
 from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityPost, Feedback, PlanOverride, Profile, Schedule, SleepSession
 from .services import date_from_string, recommendation, time_string
@@ -72,7 +75,28 @@ def feedback_data(item):
 
 def profile_data(profile):
     calendars = {item.provider: {"connected": item.connected, "selectedCalendarId": item.selected_calendar_id, "syncMode": item.sync_mode, "lastSyncedAt": item.last_synced_at.isoformat() if item.last_synced_at else None} for item in profile.calendar_connections.all()}
+    google_authorized = SocialAccount.objects.filter(user=profile.user, provider="google").exists()
+    google = calendars.setdefault("google", {"connected": False, "selectedCalendarId": "primary", "syncMode": "manual", "lastSyncedAt": None})
+    google.update({
+        "connected": bool(google.get("connected") and google_authorized),
+        "authorized": google_authorized,
+        "oauthConfigured": settings.SOCIAL_LOGIN_CONFIGURED["google"],
+        "oauthUrl": "/auth/calendars/google/connect/",
+    })
     return {"id": profile.external_id, "selectedCharacter": profile.selected_character, "onboardingComplete": profile.onboarding_complete, "profile": {"name": profile.name, "targetWake": time_string(profile.target_wake), "targetSleepMinutes": profile.target_sleep_minutes, "latencyMinutes": profile.latency_minutes, "routineMinutes": profile.routine_minutes, "adaptationWeek": profile.adaptation_week}, "settings": {"timeFormat": profile.time_format}, "alertSettings": profile.alert_settings, "community": {"points": profile.points, "groupStreak": profile.group_streak}, "calendarConnections": calendars}
+
+
+@login_required
+@require_http_methods(["GET"])
+def google_calendar_oauth_connect(request):
+    if not settings.SOCIAL_LOGIN_CONFIGURED["google"]:
+        return redirect(f"{settings.FRONTEND_ORIGIN}/?calendar=google-config-missing")
+    provider = get_social_adapter(request).get_provider(request, "google")
+    return provider.redirect(
+        request,
+        process=AuthProcess.CONNECT,
+        next_url=f"{settings.FRONTEND_ORIGIN}/?calendar=google-connected",
+    )
 
 
 @require_http_methods(["GET"])

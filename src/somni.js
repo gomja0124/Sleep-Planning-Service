@@ -35,7 +35,7 @@ const initial = {
   socialProviders: { google: false, apple: false },
   calendarConnections: {
     apple: { connected: false, syncMode: "manual", lastSyncedAt: null },
-    google: { connected: false, syncMode: "manual", lastSyncedAt: null },
+    google: { connected: false, syncMode: "manual", lastSyncedAt: null, authorized: false, oauthConfigured: false },
   },
 };
 
@@ -181,6 +181,7 @@ async function loadBackend() {
     }
     persist();
     render();
+    await finishCalendarOAuth();
     await syncCalendars("auto", { quiet: true });
   } catch (error) {
     resetSignedOutState();
@@ -197,6 +198,33 @@ async function loadBackend() {
     } else {
       showToast("서버에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.");
     }
+  }
+}
+
+async function finishCalendarOAuth() {
+  const params = new URLSearchParams(location.search);
+  const result = params.get("calendar");
+  if (!result) return;
+  history.replaceState({}, "", location.pathname);
+  if (result === "google-config-missing") {
+    showToast("Google OAuth 설정이 필요해요. 관리자에게 Client ID 등록을 요청해 주세요.");
+    return;
+  }
+  if (result !== "google-connected") return;
+  try {
+    const synced = await api.syncGoogleCalendar("primary");
+    state.calendarConnections.google = {
+      ...state.calendarConnections.google,
+      connected: true,
+      authorized: true,
+      lastSyncedAt: synced.lastSyncedAt,
+    };
+    await refreshPlan();
+    persist();
+    render();
+    showToast(`Google Calendar 연결 완료 · 일정 ${synced.imported}개 반영`);
+  } catch (error) {
+    showToast(error.message || "Google Calendar 첫 동기화에 실패했어요.");
   }
 }
 
@@ -285,10 +313,11 @@ function settings() {
 
 function calendarSetting(provider, label, description) {
   const connection = state.calendarConnections[provider];
+  const oauthUnavailable = provider === "google" && !connection.oauthConfigured;
   const lastSync = connection.lastSyncedAt
     ? new Date(connection.lastSyncedAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })
     : "아직 동기화하지 않음";
-  return `<article class="calendar-provider"><span class="calendar-mark ${provider}">${provider === "apple" ? "●" : "G"}</span><span class="calendar-copy"><b>${label}</b><small>${connection.connected ? lastSync : description}</small></span><button class="calendar-connect ${connection.connected ? "connected" : ""}" data-calendar-connect="${provider}">${connection.connected ? "연결됨" : "연결"}</button>${connection.connected ? `<label class="sync-mode"><input type="checkbox" data-calendar-auto="${provider}" ${connection.syncMode === "auto" ? "checked" : ""}><span>자동</span></label>` : ""}</article>`;
+  return `<article class="calendar-provider"><span class="calendar-mark ${provider}">${provider === "apple" ? "●" : "G"}</span><span class="calendar-copy"><b>${label}</b><small>${connection.connected ? lastSync : oauthUnavailable ? "OAuth 설정 필요" : description}</small></span><button class="calendar-connect ${connection.connected ? "connected" : ""}" data-calendar-connect="${provider}" ${oauthUnavailable ? "disabled" : ""}>${connection.connected ? "연결됨" : "연결"}</button>${connection.connected ? `<label class="sync-mode"><input type="checkbox" data-calendar-auto="${provider}" ${connection.syncMode === "auto" ? "checked" : ""}><span>자동</span></label>` : ""}</article>`;
 }
 
 function requestAppleDeviceSync(reason = "manual") {
@@ -466,6 +495,10 @@ app.addEventListener("click", async (event) => {
     else if (button.dataset.calendarConnect) {
       const provider = button.dataset.calendarConnect;
       const current = state.calendarConnections[provider];
+      if (provider === "google" && !current.connected) {
+        location.href = api.googleCalendarOAuthUrl;
+        return;
+      }
       const updated = await api.updateCalendar(provider, !current.connected, current.syncMode);
       state.calendarConnections[provider] = { ...current, ...updated };
       if (updated.connected && provider === "apple") requestAppleDeviceSync("connect");

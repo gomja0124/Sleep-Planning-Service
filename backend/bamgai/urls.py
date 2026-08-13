@@ -8,6 +8,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("auth/", views.social_login, name="social-login"),
     path("auth/status/", views.auth_status, name="auth-status"),
+    path("auth/calendars/google/connect/", views.google_calendar_oauth_connect, name="google-calendar-oauth-connect"),
     path("api/v1/health/", views.health),
     path("api/v1/csrf/", views.csrf),
     path("api/v1/auth/status/", views.api_auth_status),
