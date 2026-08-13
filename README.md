@@ -37,6 +37,11 @@ Google Calendar OAuth를 사용하려면 Google Cloud Console에서 Calendar API
 `.env.example`을 참고해 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`을 서버 환경에
 설정하면 앱 설정 화면의 Google Calendar 연결 버튼이 활성화됩니다.
 
+Apple Calendar는 OAuth 대신 iOS EventKit 권한으로 연동합니다. 실제 iPhone용
+SwiftUI/WKWebView 셸과 변경 감지 브리지는 [`ios/README.md`](./ios/README.md)에
+있으며, 브라우저에서 Apple 연결을 누른 경우에는 연결된 것으로 잘못 표시하지
+않고 iPhone 앱이 필요하다는 안내를 표시합니다.
+
 로컬 개발 환경에서는 `SLEEP_RECORD_TEST_MODE=true`가 기본값입니다. 같은 날짜에
 수면 사이클을 반복해도 기록 날짜를 하루씩 증가시켜 저장하므로, 유효 기록 3건에
 따른 추천 수면 변경을 바로 검증할 수 있습니다. 실제 날짜 기준으로 테스트하려면

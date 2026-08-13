@@ -499,9 +499,16 @@ app.addEventListener("click", async (event) => {
         location.href = api.googleCalendarOAuthUrl;
         return;
       }
+      if (provider === "apple" && !current.connected) {
+        if (!requestAppleDeviceSync("connect")) {
+          showToast("Apple Calendar는 Somni iPhone 앱에서 연결할 수 있어요.");
+        } else {
+          showToast("iPhone의 캘린더 접근 권한을 확인해 주세요.");
+        }
+        return;
+      }
       const updated = await api.updateCalendar(provider, !current.connected, current.syncMode);
       state.calendarConnections[provider] = { ...current, ...updated };
-      if (updated.connected && provider === "apple") requestAppleDeviceSync("connect");
       showToast(`${provider === "apple" ? "Apple" : "Google"} Calendar ${updated.connected ? "연결 설정을 저장했어요." : "연결을 해제했어요."}`);
     }
     else if (button.dataset.sleepiness) state.checkin.sleepiness = Number(button.dataset.sleepiness);
@@ -585,6 +592,15 @@ globalThis.somniCalendarEventsChanged = async (events = [], deletedIds = []) => 
   } catch (error) {
     showToast(error.message);
     throw error;
+  }
+};
+
+globalThis.somniAppleCalendarPermissionChanged = (granted) => {
+  if (!granted) {
+    state.calendarConnections.apple = { ...state.calendarConnections.apple, connected: false };
+    persist();
+    render();
+    showToast("설정 앱에서 Somni의 캘린더 접근을 허용해 주세요.");
   }
 };
 
