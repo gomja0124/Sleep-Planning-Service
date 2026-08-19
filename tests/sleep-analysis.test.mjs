@@ -301,6 +301,23 @@ test("추천 취침 구간보다 3회 이상 일찍 잔 경우 음의 취침 보
   assert.equal(result.records[0].executionOffsetMinutes, -30);
 });
 
+test("입면 지연이 3회 이상 반복되면 더 일찍 눕도록 보정한다", () => {
+  const result = analyzeSleepHistory({
+    profile,
+    feedback: repeatedEntries(3, {
+      sleepOnsetDelayMinutes: 45,
+      recommendationSnapshot: {
+        bedtimeWindowStart: "23:00",
+        bedtimeWindowEnd: "23:30",
+      },
+    }),
+  });
+  assert.equal(result.counts.sleepOnsetDifficultyCountLast5, 3);
+  assert.equal(result.repeatedSleepOnsetDifficulty, true);
+  assert.equal(result.averageSleepOnsetDelayMinutes, 45);
+  assert.equal(result.recommendedBedtimeOffsetMinutes, -30);
+});
+
 test("dominantFailureReason은 빈 값을 제외하고 가장 최근 항목을 기준으로 동률을 결정한다", () => {
   const result = analyzeSleepHistory({
     profile,

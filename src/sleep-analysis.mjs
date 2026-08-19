@@ -10,6 +10,7 @@ const FINE_TARGET_THRESHOLD = 480;
 const MAX_EXPLORATION_TARGET = 540;
 const LATE_EXECUTION_THRESHOLD_MINUTES = 15;
 const REPEATED_EXECUTION_COUNT = 3;
+const ONSET_DIFFICULTY_THRESHOLD_MINUTES = 30;
 
 const PRIMARY_STATE_PRIORITY = [
   "INSUFFICIENT_SLEEP",
@@ -461,11 +462,21 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
   const averageEarlyExecutionMinutes = average(earlyExecutionOffsets.map((value) => Math.abs(value)));
   const repeatedLateExecution = lateExecutionOffsets.length >= REPEATED_EXECUTION_COUNT;
   const repeatedEarlyExecution = earlyExecutionOffsets.length >= REPEATED_EXECUTION_COUNT;
-  const recommendedBedtimeOffsetMinutes = repeatedLateExecution
+  const onsetDelays = ruleRecords
+    .map((record) => record.sleepOnsetDelayMinutes)
+    .filter((value) => value !== null && value >= ONSET_DIFFICULTY_THRESHOLD_MINUTES);
+  const averageSleepOnsetDelayMinutes = average(ruleRecords.map((record) => record.sleepOnsetDelayMinutes));
+  const repeatedSleepOnsetDifficulty = onsetDelays.length >= REPEATED_EXECUTION_COUNT;
+  const executionCorrectionMinutes = repeatedLateExecution
     ? Math.min(30, Math.max(15, Math.round((averageLateExecutionMinutes ?? 15) / 15) * 15))
     : repeatedEarlyExecution
       ? -Math.min(30, Math.max(15, Math.round((averageEarlyExecutionMinutes ?? 15) / 15) * 15))
       : 0;
+  const onsetCorrectionMinutes = repeatedSleepOnsetDifficulty
+    ? -Math.min(30, Math.max(15, Math.round((averageSleepOnsetDelayMinutes ?? 30) / 30) * 15))
+    : 0;
+  const recommendedBedtimeOffsetMinutes = Math.max(-30, Math.min(30,
+    executionCorrectionMinutes + onsetCorrectionMinutes));
 
   const matchedStates = [];
   if (recordCount < 3) {
@@ -577,8 +588,10 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
     averageSleepDeficitMinutes,
     averageLateExecutionMinutes,
     averageEarlyExecutionMinutes,
+    averageSleepOnsetDelayMinutes,
     repeatedLateExecution,
     repeatedEarlyExecution,
+    repeatedSleepOnsetDifficulty,
     recommendedBedtimeOffsetMinutes,
     averageFreshness,
     averageSleepiness,
@@ -602,6 +615,7 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
       napCountLast5,
       lateExecutionCountLast5: lateExecutionOffsets.length,
       earlyExecutionCountLast5: earlyExecutionOffsets.length,
+      sleepOnsetDifficultyCountLast5: onsetDelays.length,
     },
     confidence,
     reasons: buildReasons({
