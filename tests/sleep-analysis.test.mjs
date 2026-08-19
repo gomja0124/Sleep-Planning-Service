@@ -14,13 +14,17 @@ function feedbackEntry({
   freshness = 3,
   sleepiness = 3,
   failureReason = "",
+  sleepOnsetDelayMinutes,
   napDurationMinutes,
   napReason,
+  recommendationSnapshot,
 } = {}) {
   return {
     date, actualSleep, actualWake, freshness, sleepiness, failureReason,
+    ...(sleepOnsetDelayMinutes === undefined ? {} : { sleepOnsetDelayMinutes }),
     ...(napDurationMinutes === undefined ? {} : { napDurationMinutes }),
     ...(napReason === undefined ? {} : { napReason }),
+    ...(recommendationSnapshot === undefined ? {} : { recommendationSnapshot }),
   };
 }
 
@@ -217,6 +221,84 @@ test("평균과 중앙값을 계산한다", () => {
   assert.equal(result.averageSleepOpportunityMinutes, 480);
   assert.equal(result.medianSleepOpportunityMinutes, 480);
   assert.equal(result.averageSleepDeficitMinutes, 10);
+});
+
+test("수면 가능 시간과 입면 지연을 반영한 추정 실제 수면시간을 분리한다", () => {
+  const result = analyzeSleepHistory({
+    profile: { targetSleepMinutes: 450 },
+    feedback: [
+      feedbackEntry({
+        date: "2026-08-12",
+        actualSleep: "23:00",
+        actualWake: "07:00",
+        sleepOnsetDelayMinutes: 30,
+      }),
+      feedbackEntry({
+        date: "2026-08-11",
+        actualSleep: "23:00",
+        actualWake: "07:00",
+        sleepOnsetDelayMinutes: 60,
+      }),
+      feedbackEntry({
+        date: "2026-08-10",
+        actualSleep: "23:00",
+        actualWake: "07:00",
+        sleepOnsetDelayMinutes: null,
+      }),
+    ],
+  });
+  assert.equal(result.averageSleepOpportunityMinutes, 480);
+  assert.equal(result.averageEstimatedSleepMinutes, 450);
+  assert.equal(result.averageDecisionSleepMinutes, 450);
+});
+
+test("현재 목표가 540분보다 크면 추천 목표를 자동으로 줄이지 않는다", () => {
+  const result = analyzeSleepHistory({
+    profile: { targetSleepMinutes: 600 },
+    feedback: repeatedEntries(5, {
+      actualSleep: "23:00",
+      actualWake: "07:00",
+      freshness: 4,
+      sleepiness: 2,
+    }),
+  });
+  assert.equal(result.currentTargetSleepMinutes, 600);
+  assert.equal(result.recommendedTargetSleepMinutes, 600);
+  assert.equal(result.suggestedAdjustmentMinutes, 0);
+});
+
+test("추천 취침 구간보다 3회 이상 늦게 잔 경우 15~30분의 취침 보정을 제안한다", () => {
+  const result = analyzeSleepHistory({
+    profile,
+    feedback: repeatedEntries(3, {
+      actualSleep: "00:00",
+      recommendationSnapshot: {
+        bedtimeWindowStart: "23:00",
+        bedtimeWindowEnd: "23:30",
+      },
+    }),
+  });
+  assert.equal(result.counts.lateExecutionCountLast5, 3);
+  assert.equal(result.repeatedLateExecution, true);
+  assert.equal(result.recommendedBedtimeOffsetMinutes, 30);
+  assert.equal(result.records[0].executionOffsetMinutes, 30);
+});
+
+test("추천 취침 구간보다 3회 이상 일찍 잔 경우 음의 취침 보정을 제안한다", () => {
+  const result = analyzeSleepHistory({
+    profile,
+    feedback: repeatedEntries(3, {
+      actualSleep: "22:30",
+      recommendationSnapshot: {
+        bedtimeWindowStart: "23:00",
+        bedtimeWindowEnd: "23:30",
+      },
+    }),
+  });
+  assert.equal(result.counts.earlyExecutionCountLast5, 3);
+  assert.equal(result.repeatedEarlyExecution, true);
+  assert.equal(result.recommendedBedtimeOffsetMinutes, -30);
+  assert.equal(result.records[0].executionOffsetMinutes, -30);
 });
 
 test("dominantFailureReason은 빈 값을 제외하고 가장 최근 항목을 기준으로 동률을 결정한다", () => {

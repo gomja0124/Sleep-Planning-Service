@@ -8,6 +8,8 @@ const MODERATE_NAP_THRESHOLD_MINUTES = 30;
 const COARSE_TARGET_THRESHOLD = 420;
 const FINE_TARGET_THRESHOLD = 480;
 const MAX_EXPLORATION_TARGET = 540;
+const LATE_EXECUTION_THRESHOLD_MINUTES = 15;
+const REPEATED_EXECUTION_COUNT = 3;
 
 const PRIMARY_STATE_PRIORITY = [
   "INSUFFICIENT_SLEEP",
@@ -17,8 +19,8 @@ const PRIMARY_STATE_PRIORITY = [
   "NO_CLEAR_PATTERN",
 ];
 
-// TODO(REPEATED_LATE_EXECUTION): plannedBedtimeWindowStart/End가 feedback 또는
-// recommendation history에 저장되면 actualSleep과 비교하는 Rule을 추가한다.
+// REPEATED_LATE_EXECUTION: recommendationSnapshot이 있는 최근 기록을 기준으로
+// 실제 취침이 권장 구간에서 반복적으로 벗어나면 취침 시각을 15~30분 보정한다.
 // TODO(REPEATED_SLEEP_ONSET_DIFFICULTY): sleepOnsetDifficulty(1|2|3)가
 // 외부 schema에 추가되기 전까지 failureReason을 이 Rule의 대체값으로 사용하지 않는다.
 // TODO(SCHEDULE_CONFLICT): 일정으로 수면 확보 가능 여부는 sleep history 분석이
@@ -41,6 +43,21 @@ function parseClock(value) {
   const [hours, minutes] = value.split(":").map(Number);
   if (hours > 23 || minutes > 59) return null;
   return hours * 60 + minutes;
+}
+
+function signedExecutionOffsetMinutes(actualTime, snapshot = {}) {
+  const actual = parseClock(actualTime);
+  const start = parseClock(snapshot?.bedtimeWindowStart);
+  const end = parseClock(snapshot?.bedtimeWindowEnd);
+  if (actual === null || start === null || end === null) return null;
+
+  const windowLength = (end - start + MINUTES_IN_DAY) % MINUTES_IN_DAY;
+  const actualFromStart = (actual - start + MINUTES_IN_DAY) % MINUTES_IN_DAY;
+  if (actualFromStart <= windowLength) return 0;
+  if (actualFromStart - windowLength <= MINUTES_IN_DAY / 2) {
+    return actualFromStart - windowLength;
+  }
+  return actualFromStart - MINUTES_IN_DAY;
 }
 
 function roundMetric(value, digits = 1) {
@@ -105,6 +122,10 @@ function normalizeFeedbackEntry(entry, originalIndex) {
     date: entry.date,
     actualSleep: entry.actualSleep,
     actualWake: entry.actualWake,
+    recommendationSnapshot: entry.recommendationSnapshot
+      && typeof entry.recommendationSnapshot === "object"
+      ? { ...entry.recommendationSnapshot }
+      : null,
     behavior: {
       lightsOutTime: entry.actualSleep,
       wakeTime: entry.actualWake,
@@ -122,6 +143,10 @@ function normalizeFeedbackEntry(entry, originalIndex) {
     sleepOpportunityMinutes,
     sleepOnsetDelayMinutes,
     estimatedSleepMinutes,
+    executionOffsetMinutes: signedExecutionOffsetMinutes(
+      entry.actualSleep,
+      entry.recommendationSnapshot,
+    ),
     rawSleepDeficitMinutes: null,
     sleepDeficitMinutes: null,
   };
@@ -393,7 +418,8 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
   const averageEstimatedSleepMinutes = average(
     analysisRecords.map((record) => record.estimatedSleepMinutes),
   );
-  const averageSleepOpportunityLast5Minutes = average(
+  // Target decisions use estimated sleep, while reports retain opportunity time.
+  const averageDecisionSleepMinutes = average(
     ruleRecords.map((record) => record.estimatedSleepMinutes),
   );
   const medianSleepOpportunityMinutes = median(
@@ -424,6 +450,22 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
     record.subjective.napDurationMinutes !== null
     && record.subjective.napDurationMinutes >= MODERATE_NAP_THRESHOLD_MINUTES
   )).length;
+  const executionOffsets = ruleRecords.map((record) => record.executionOffsetMinutes);
+  const lateExecutionOffsets = executionOffsets.filter((value) => (
+    value !== null && value >= LATE_EXECUTION_THRESHOLD_MINUTES
+  ));
+  const earlyExecutionOffsets = executionOffsets.filter((value) => (
+    value !== null && value <= -LATE_EXECUTION_THRESHOLD_MINUTES
+  ));
+  const averageLateExecutionMinutes = average(lateExecutionOffsets);
+  const averageEarlyExecutionMinutes = average(earlyExecutionOffsets.map((value) => Math.abs(value)));
+  const repeatedLateExecution = lateExecutionOffsets.length >= REPEATED_EXECUTION_COUNT;
+  const repeatedEarlyExecution = earlyExecutionOffsets.length >= REPEATED_EXECUTION_COUNT;
+  const recommendedBedtimeOffsetMinutes = repeatedLateExecution
+    ? Math.min(30, Math.max(15, Math.round((averageLateExecutionMinutes ?? 15) / 15) * 15))
+    : repeatedEarlyExecution
+      ? -Math.min(30, Math.max(15, Math.round((averageEarlyExecutionMinutes ?? 15) / 15) * 15))
+      : 0;
 
   const matchedStates = [];
   if (recordCount < 3) {
@@ -449,14 +491,14 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
 
   const primaryState = selectPrimaryState(matchedStates);
   const hasEnoughData = recordCount >= 3;
-  const currentTargetNotReached = averageSleepOpportunityLast5Minutes !== null
-    && averageSleepOpportunityLast5Minutes < targetSleepMinutes - CURRENT_TARGET_GAP_MINUTES;
+  const currentTargetNotReached = averageDecisionSleepMinutes !== null
+    && averageDecisionSleepMinutes < targetSleepMinutes - CURRENT_TARGET_GAP_MINUTES;
   const repeatedMoreSleepSignal = needsMoreSleepCount >= 3;
   const canExploreLongerTarget = hasEnoughData
     && repeatedMoreSleepSignal
     && !currentTargetNotReached
-    && averageSleepOpportunityLast5Minutes !== null
-    && averageSleepOpportunityLast5Minutes >= targetSleepMinutes - CURRENT_TARGET_GAP_MINUTES;
+    && averageDecisionSleepMinutes !== null
+    && averageDecisionSleepMinutes >= targetSleepMinutes - CURRENT_TARGET_GAP_MINUTES;
 
   let suggestedAdjustmentMinutes = 0;
   let adjustmentPhase = hasEnoughData ? "OBSERVE" : "OBSERVE";
@@ -505,10 +547,12 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
     recommendedAction = "STABILIZE_SLEEP_TIMING";
   }
 
-  const recommendedTargetSleepMinutes = Math.min(
-    MAX_EXPLORATION_TARGET,
-    Math.max(targetSleepMinutes, targetSleepMinutes + suggestedAdjustmentMinutes),
-  );
+  const recommendedTargetSleepMinutes = targetSleepMinutes >= MAX_EXPLORATION_TARGET
+    ? targetSleepMinutes
+    : Math.min(
+      MAX_EXPLORATION_TARGET,
+      Math.max(targetSleepMinutes, targetSleepMinutes + suggestedAdjustmentMinutes),
+    );
 
   const confidence = recordCount <= 2
     ? "insufficient"
@@ -527,8 +571,15 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
     currentTargetSleepMinutes: targetSleepMinutes,
     recommendedTargetSleepMinutes,
     averageSleepOpportunityMinutes,
+    averageEstimatedSleepMinutes,
+    averageDecisionSleepMinutes,
     medianSleepOpportunityMinutes,
     averageSleepDeficitMinutes,
+    averageLateExecutionMinutes,
+    averageEarlyExecutionMinutes,
+    repeatedLateExecution,
+    repeatedEarlyExecution,
+    recommendedBedtimeOffsetMinutes,
     averageFreshness,
     averageSleepiness,
     bedtimeRangeMinutes,
@@ -549,6 +600,8 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
       lowConditionDespiteDurationCountLast5: lowConditionCount,
       needsMoreSleepCountLast5: needsMoreSleepCount,
       napCountLast5,
+      lateExecutionCountLast5: lateExecutionOffsets.length,
+      earlyExecutionCountLast5: earlyExecutionOffsets.length,
     },
     confidence,
     reasons: buildReasons({
@@ -556,7 +609,7 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
       insufficientSleepCount,
       lowConditionCount,
       needsMoreSleepCount,
-      averageSleepOpportunityMinutes: averageSleepOpportunityLast5Minutes,
+      averageSleepOpportunityMinutes: averageDecisionSleepMinutes,
       currentTargetSleepMinutes: targetSleepMinutes,
       suggestedAdjustmentMinutes,
       adjustmentStrategy,
@@ -573,6 +626,8 @@ export function analyzeSleepHistory({ profile = {}, feedback = [], adaptationSta
       sleepOpportunityMinutes: record.sleepOpportunityMinutes,
       sleepOnsetDelayMinutes: record.sleepOnsetDelayMinutes,
       estimatedSleepMinutes: record.estimatedSleepMinutes,
+      executionOffsetMinutes: record.executionOffsetMinutes,
+      recommendationSnapshot: record.recommendationSnapshot,
       rawSleepDeficitMinutes: record.rawSleepDeficitMinutes,
       sleepDeficitMinutes: record.sleepDeficitMinutes,
     })),
