@@ -1,0 +1,62 @@
+# 화면만 보여주는 정적 데모를 GitHub Pages로 내보낸다. 기본 배포 경로가 아니다.
+#
+# Pages(github.io)와 백엔드(예: onrender.com)는 서로 다른 사이트라서 세션 쿠키가
+# 크로스사이트 쿠키가 된다. Safari와 Firefox는 이를 기본 차단하므로 아이폰에서
+# 로그인이 되지 않고, 로그인이 필요한 게시판도 함께 막힌다.
+#
+# 실제 배포는 Django가 프런트까지 같은 출처에서 서빙하는 방식을 쓴다. build.sh와
+# README의 배포 절을 참고할 것.
+#
+# 그래도 정적 화면만 공유해야 할 때 Actions 탭에서 수동으로 실행한다.
+# 저장소 Variables에 SOMNI_API_BASE(백엔드 주소)가 있어야 한다.
+
+name: Deploy static demo to Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 백엔드 주소 주입
+        env:
+          SOMNI_API_BASE: ${{ vars.SOMNI_API_BASE }}
+        run: |
+          if [ -z "$SOMNI_API_BASE" ]; then
+            echo "::error::저장소 변수 SOMNI_API_BASE가 비어 있습니다. 배포된 백엔드 주소를 넣어 주세요."
+            exit 1
+          fi
+          printf 'window.SOMNI_API_BASE = "%s";\n' "$SOMNI_API_BASE" > config.js
+          cat config.js
+
+      - name: 정적 파일만 추리기
+        run: |
+          mkdir -p _site
+          cp index.html planner.html config.js *.css _site/
+          cp -r src assets _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

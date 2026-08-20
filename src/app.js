@@ -9,8 +9,23 @@ import {
   generateRecommendations,
 } from "./planner.mjs";
 import { analyzeSleepHistory } from "./sleep-analysis.mjs";
+import { api } from "./api-client.js";
+import { createCommunity } from "./community/index.mjs";
+import {
+  createCommunityViewState,
+  handleCommunityClick,
+  handleCommunityInput,
+  handleCommunitySubmit,
+  renderCommunity as renderCommunityBoard,
+} from "./community/ui.mjs";
 
 const STORAGE_KEY = "bamgai-demo-v1";
+
+// 게시판은 somni.js와 같은 모듈·같은 서버를 쓴다. 어느 화면에서 글을 써도 함께 보인다.
+// 이 화면에는 로그인 UI가 없어서, 로그인이 필요하면 서버의 로그인 페이지로 보낸다.
+const community = createCommunity({ client: api });
+const communityView = createCommunityViewState();
+const goToLogin = () => { location.href = api.loginUrl; };
 
 const CHARACTER_OPTIONS = {
   owl: {
@@ -24,12 +39,6 @@ const CHARACTER_OPTIONS = {
     description: "밤의 변화를 빠르게 알아채고 유연하게 계획을 바꿔요.",
   },
 };
-
-const COMMUNITY_POSTS = [
-  { type: "모집", title: "서울대 멋사 낮밤바꾸기 취침팟", meta: "오늘 23:50 · 8명 참여", copy: "자정 전에 같이 불 끄고 아침 체크까지 해요." },
-  { type: "도전", title: "1주일 동안 50시간 자기", meta: "3일 남음 · 32/50시간", copy: "무리한 몰아자기 없이 매일 기록을 채우는 누적 도전이에요." },
-  { type: "시즌", title: "개강 리듬 회복 주간", meta: "한정 달 쿠션 보상", copy: "첫 수업 시간에 맞춰 5일 동안 기상 체크를 완료해요." },
-];
 
 const CHALLENGES = [
   { id: "midnight", title: "12시 취침팟", goal: "오늘 00:00 전에 불 끄기", progress: 72, people: 18, reward: 30 },
@@ -635,10 +644,8 @@ function renderCommunity() {
     </section>
 
     <div class="community-grid">
-      <section class="card board-card">
-        <div class="card-heading"><div><span class="card-kicker">BOARD</span><h3>커뮤니티 게시판</h3></div><button class="ghost-button compact" data-action="create-community">친구 모집하기</button></div>
-        <div class="board-tabs"><button class="is-active">최신글</button><button>인기글</button><button>모집글</button></div>
-        <div class="post-list">${COMMUNITY_POSTS.map((post) => `<article class="post-card"><span>${post.type}</span><div><h4>${post.title}</h4><p>${post.copy}</p><small>${post.meta}</small></div><button class="icon-button bordered" aria-label="글 보기">${icon("arrow")}</button></article>`).join("")}</div>
+      <section class="card board-card cm-theme-day">
+        ${renderCommunityBoard(community, communityView)}
       </section>
 
       <section class="card challenge-list-card">
@@ -773,7 +780,20 @@ function toast(message) {
   }, 2800);
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
+  // 게시판 카드는 button이 아니라서 아래 data-action 검사보다 먼저 물어본다.
+  const board = await handleCommunityClick(event, {
+    community,
+    view: communityView,
+    confirm: (message) => window.confirm(message),
+    onRequireLogin: goToLogin,
+  });
+  if (board.handled) {
+    if (board.toast) toast(board.toast);
+    else render();
+    return;
+  }
+
   const viewButton = event.target.closest("[data-view]");
   if (viewButton) {
     ui.view = viewButton.dataset.view;
@@ -908,10 +928,6 @@ document.addEventListener("click", (event) => {
     toast(joined.has(challengeId) ? "도전에 참여했어요. 오늘 수면 기록부터 함께 채워요." : "도전 참여를 취소했어요.");
   }
 
-  if (action === "create-community") {
-    toast("친구 초대와 커뮤니티 생성은 다음 서버 연동 단계에서 열려요.");
-  }
-
   if (action === "open-dressing") {
     toast(`현재 ${state.community.points}P를 보유하고 있어요. 꾸미기 저장은 다음 단계에서 연결해요.`);
   }
@@ -964,8 +980,17 @@ document.addEventListener("click", (event) => {
   }
 });
 
-document.addEventListener("submit", (event) => {
+document.addEventListener("submit", async (event) => {
+  // await보다 먼저 막아야 한다. 마이크로태스크로 넘어간 뒤에는 브라우저가 이미 폼을 보낸 뒤다.
   event.preventDefault();
+
+  const board = await handleCommunitySubmit(event, { community, view: communityView, onRequireLogin: goToLogin });
+  if (board.handled) {
+    if (board.toast) toast(board.toast);
+    else render();
+    return;
+  }
+
   const form = event.target;
   const data = new FormData(form);
 
@@ -1086,4 +1111,15 @@ document.addEventListener("submit", (event) => {
   }
 });
 
+// 검색은 글자마다 다시 그리므로 입력 위치를 되돌려 준다.
+document.addEventListener("input", (event) => {
+  if (!handleCommunityInput(event, { view: communityView }).handled) return;
+  render();
+  const search = app.querySelector('[data-cm-input="query"]');
+  if (!search) return;
+  search.focus();
+  search.setSelectionRange(search.value.length, search.value.length);
+});
+
 render();
+community.load().then(render, () => render());

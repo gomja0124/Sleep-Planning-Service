@@ -1,0 +1,627 @@
+/* 커뮤니티 게시판 전용 스타일.
+   app.js(밝은 배경)와 somni.js(어두운 배경) 양쪽에 얹히므로 호스트 변수에 기대지 않고
+   자체 변수를 쓴다. 기본값은 밤 테마이고, 호스트가 상위 요소에 cm-theme-day를 붙이면
+   밝은 테마로 바뀐다. 모든 클래스는 cm- 로 시작해 기존 스타일과 겹치지 않는다. */
+
+.cm {
+  --cm-surface: #1a1e36;
+  --cm-surface-2: #222742;
+  --cm-ink: #f6f4ff;
+  --cm-muted: #a9adc4;
+  --cm-line: rgba(255, 255, 255, 0.1);
+  --cm-accent: #b3a1ff;
+  --cm-accent-ink: #16182c;
+  --cm-danger: #ff8a8a;
+  --cm-radius: 18px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--cm-ink);
+  text-align: left;
+}
+
+.cm-theme-day .cm {
+  --cm-surface: #fffefd;
+  --cm-surface-2: #f5f3ec;
+  --cm-ink: #17202c;
+  --cm-muted: #667085;
+  --cm-line: #e9e7df;
+  --cm-accent: #7257e8;
+  --cm-accent-ink: #ffffff;
+  --cm-danger: #d84a4a;
+}
+
+.cm h2,
+.cm h3,
+.cm h4,
+.cm p {
+  margin: 0;
+}
+
+.cm-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── 머리말과 계정 줄 ───────────────────────────── */
+
+.cm-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cm-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  color: var(--cm-accent);
+  margin-bottom: 6px;
+}
+
+.cm-head h2 {
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.cm-account {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: var(--cm-radius);
+}
+
+.cm-account-name {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.cm-account-name b {
+  font-size: 14px;
+}
+
+.cm-account-name small {
+  font-size: 12px;
+  color: var(--cm-muted);
+}
+
+/* ── 버튼 ───────────────────────────────────────── */
+
+.cm-primary,
+.cm-ghost,
+.cm-back,
+.cm-like,
+.cm-signin-hint {
+  font: inherit;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.cm-primary {
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cm-accent-ink);
+  background: var(--cm-accent);
+  border: 0;
+}
+
+.cm-ghost {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cm-ink);
+  background: transparent;
+  border: 1px solid var(--cm-line);
+}
+
+.cm-compact {
+  padding: 7px 13px;
+  font-size: 13px;
+}
+
+.cm-full {
+  width: 100%;
+}
+
+.cm-danger {
+  color: var(--cm-danger);
+}
+
+.cm-primary:hover,
+.cm-ghost:hover {
+  opacity: 0.85;
+}
+
+.cm-primary:active,
+.cm-ghost:active {
+  transform: scale(0.98);
+}
+
+.cm-back {
+  align-self: flex-start;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cm-muted);
+  background: transparent;
+  border: 1px solid var(--cm-line);
+}
+
+/* ── 탭과 검색 ──────────────────────────────────── */
+
+.cm-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.cm-tabs button {
+  flex: 1;
+  padding: 10px 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cm-muted);
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.cm-tabs button.is-active {
+  color: var(--cm-accent-ink);
+  background: var(--cm-accent);
+  border-color: transparent;
+}
+
+.cm-search input {
+  width: 100%;
+  padding: 12px 16px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--cm-ink);
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: 999px;
+}
+
+.cm-search input::placeholder {
+  color: var(--cm-muted);
+}
+
+/* ── 글 목록 ────────────────────────────────────── */
+
+.cm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: var(--cm-radius);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.cm-card:hover {
+  border-color: var(--cm-accent);
+}
+
+.cm-card:active {
+  transform: scale(0.99);
+}
+
+.cm-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cm-card-title {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.cm-card-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cm-muted);
+  white-space: pre-line;
+}
+
+.cm-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cm-muted);
+}
+
+.cm-counts {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.cm-counts b {
+  font-weight: 600;
+}
+
+.cm-liked {
+  color: var(--cm-accent);
+}
+
+.cm-time {
+  font-size: 11px;
+  color: var(--cm-muted);
+}
+
+.cm-chip {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: var(--cm-surface-2);
+  color: var(--cm-ink);
+}
+
+.cm-chip-recruitment {
+  background: rgba(179, 161, 255, 0.22);
+  color: #b3a1ff;
+}
+
+.cm-chip-challenge,
+.cm-chip-season {
+  background: rgba(216, 255, 115, 0.2);
+  color: #9cb84f;
+}
+
+.cm-chip-proof {
+  background: rgba(168, 230, 208, 0.22);
+  color: #6cc9a6;
+}
+
+.cm-chip-question {
+  background: rgba(255, 242, 212, 0.22);
+  color: #d9b86a;
+}
+
+.cm-chip-free {
+  background: rgba(160, 175, 255, 0.18);
+  color: #8fa2e8;
+}
+
+.cm-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 800;
+  color: #16182c;
+  background: var(--cm-accent);
+  border-radius: 10px;
+}
+
+.cm-avatar-bat {
+  background: #8a67c7;
+  color: #fff;
+}
+
+.cm-avatar-cat {
+  background: #f0c987;
+}
+
+.cm-avatar-owl {
+  background: #41bceb;
+}
+
+.cm-empty {
+  padding: 28px 16px;
+  font-size: 13px;
+  color: var(--cm-muted);
+  text-align: center;
+  background: var(--cm-surface);
+  border: 1px dashed var(--cm-line);
+  border-radius: var(--cm-radius);
+  list-style: none;
+}
+
+.cm-error {
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cm-danger);
+  background: rgba(216, 74, 74, 0.12);
+  border-radius: 12px;
+}
+
+/* ── 글 상세 ────────────────────────────────────── */
+
+.cm-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: var(--cm-radius);
+}
+
+.cm-detail h2 {
+  font-size: 20px;
+  letter-spacing: -0.03em;
+  line-height: 1.35;
+}
+
+.cm-detail-author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--cm-muted);
+}
+
+.cm-detail-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--cm-ink);
+}
+
+.cm-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cm-line);
+}
+
+.cm-owner-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.cm-like {
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cm-ink);
+  background: var(--cm-surface-2);
+  border: 1px solid var(--cm-line);
+}
+
+.cm-like.is-liked {
+  color: var(--cm-accent-ink);
+  background: var(--cm-accent);
+  border-color: transparent;
+}
+
+/* ── 댓글 ───────────────────────────────────────── */
+
+.cm-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: var(--cm-radius);
+}
+
+.cm-comments h3 {
+  font-size: 14px;
+}
+
+.cm-comments ul {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cm-comment {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.cm-comment div {
+  flex: 1;
+  min-width: 0;
+}
+
+.cm-comment small {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: var(--cm-muted);
+}
+
+.cm-comment p {
+  font-size: 13px;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.cm-comment-form {
+  display: flex;
+  gap: 8px;
+}
+
+.cm-comment-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 15px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--cm-ink);
+  background: var(--cm-surface-2);
+  border: 1px solid var(--cm-line);
+  border-radius: 999px;
+}
+
+.cm-signin-hint {
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cm-muted);
+  background: var(--cm-surface-2);
+  border: 1px dashed var(--cm-line);
+  border-radius: 14px;
+}
+
+/* ── 글쓰기와 로그인 폼 ─────────────────────────── */
+
+.cm-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: var(--cm-radius);
+}
+
+.cm-form h2 {
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+.cm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cm-field span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cm-muted);
+}
+
+.cm-field input,
+.cm-field textarea {
+  width: 100%;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--cm-ink);
+  background: var(--cm-surface-2);
+  border: 1px solid var(--cm-line);
+  border-radius: 14px;
+  resize: vertical;
+}
+
+.cm-field input:focus,
+.cm-field textarea:focus,
+.cm-search input:focus,
+.cm-comment-form input:focus {
+  outline: 2px solid var(--cm-accent);
+  outline-offset: 1px;
+}
+
+.cm-categories {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cm-categories legend {
+  padding: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cm-muted);
+}
+
+.cm-category {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--cm-surface-2);
+  border: 1px solid var(--cm-line);
+  border-radius: 14px;
+  cursor: pointer;
+}
+
+.cm-category span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cm-category b {
+  font-size: 13px;
+}
+
+.cm-category small {
+  font-size: 11px;
+  color: var(--cm-muted);
+}
+
+.cm-category:has(input:checked) {
+  border-color: var(--cm-accent);
+}
+
+.cm-auth-switch {
+  display: flex;
+  gap: 8px;
+}
+
+.cm-auth-switch button {
+  flex: 1;
+  padding: 11px 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cm-muted);
+  background: var(--cm-surface);
+  border: 1px solid var(--cm-line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.cm-auth-switch button.is-active {
+  color: var(--cm-accent-ink);
+  background: var(--cm-accent);
+  border-color: transparent;
+}
+
+.cm-note {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--cm-muted);
+}

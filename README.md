@@ -31,6 +31,27 @@ npm run dev
 ```
 
 브라우저에서 [http://localhost:4173](http://localhost:4173)을 엽니다.
+`src/app.js` 쪽 수면 계획 화면은 [http://localhost:4173/planner.html](http://localhost:4173/planner.html)에서 볼 수 있습니다.
+
+## 커뮤니티 게시판
+
+`feat/ppine-community` 브랜치에서 게시판을 붙였습니다. 계정은 앱이 이미 쓰는
+로그인 세션을 그대로 따라가고, 게시판이 계정을 따로 만들지 않습니다.
+
+- 말머리(모집·인증·질문·자유)별 글쓰기, 수정, 삭제
+- 최신글·인기글·모집글 정렬과 제목·내용·닉네임 검색
+- 댓글 작성과 삭제, 좋아요와 취소
+- 글쓴이만 자기 글을 수정·삭제하고, 댓글은 작성자 본인과 글쓴이가 삭제
+
+데이터는 전부 Django 백엔드에 있습니다. 화면 로직은 `src/community/`에 모아 두어
+`src/somni.js`와 `src/app.js`가 같은 모듈과 같은 서버를 공유합니다. 어느 화면에서
+쓴 글이든 양쪽에 그대로 보입니다.
+
+읽기에도 로그인이 필요한데, `/api/v1/` 전체를 막는 기존
+`ApiLoginRequiredMiddleware` 규칙을 그대로 따랐기 때문입니다.
+
+말머리는 서버의 `CommunityPost.POST_TYPES`가 기준입니다. 운영이 만드는
+`challenge`·`season`은 목록에는 나오지만 글쓰기 화면에는 노출하지 않습니다.
 
 Google Calendar OAuth를 사용하려면 Google Cloud Console에서 Calendar API를
 활성화하고 OAuth 웹 클라이언트의 승인된 리디렉션 URI에
@@ -55,6 +76,43 @@ SwiftUI/WKWebView 셸과 변경 감지 브리지는 [`ios/README.md`](./ios/READ
 npm run test:all
 ```
 
+## 배포
+
+**Django가 프런트까지 같은 출처에서 서빙합니다.** 서비스 하나만 올리면 됩니다.
+
+프런트와 API를 다른 사이트에 나눠 올리면 세션 쿠키가 크로스사이트 쿠키가 되는데,
+Safari와 Firefox는 이를 기본 차단합니다. 아이폰에서 로그인이 안 된다는 뜻이라
+수면 앱에는 치명적입니다. 같은 출처로 내보내면 이 문제가 생기지 않고 CORS도
+필요 없습니다.
+
+Render 기준으로는 저장소에 `render.yaml`이 있어 **Blueprint로 한 번에** 만들어집니다.
+대시보드에서 New + → Blueprint → 이 저장소를 고르면 웹 서비스와 Postgres가 함께
+생성되고, 비밀 키는 Render가 생성합니다. 손으로 넣어야 하는 환경변수가 없습니다.
+
+직접 설정할 때는 아래 두 명령을 씁니다.
+
+- **Build Command** — `./build.sh` (의존성 설치, 프런트 복사, 정적 파일 수집, 마이그레이션)
+- **Start Command** — `gunicorn bamgai.wsgi:application --chdir backend --bind 0.0.0.0:$PORT`
+
+| 변수 | 값 | 없으면 |
+|---|---|---|
+| `DJANGO_DEBUG` | `false` | 예외 화면에 소스와 설정이 노출됩니다 |
+| `DJANGO_SECRET_KEY` | 길고 무작위한 값 | **서버가 아예 뜨지 않습니다** |
+| `DJANGO_ALLOWED_HOSTS` | 배포 도메인 (예: `.onrender.com`) | 모든 요청이 400 |
+| `DATABASE_URL` | Postgres 연결 문자열 | 재배포마다 글이 사라집니다 |
+
+`FRONTEND_ORIGIN`은 지정하지 않으면 Render가 주입하는 `RENDER_EXTERNAL_URL`을
+씁니다. 배포 전에는 주소를 알 수 없으므로, 직접 넣고 재배포할 필요가 없습니다.
+다른 호스팅을 쓴다면 배포된 자기 주소를 직접 넣으세요.
+
+`SOMNI_API_BASE`는 설정하지 않습니다. `src/api-client.js`가 알아서 자기 출처를 씁니다.
+
+### 정적 화면만 공유할 때
+
+`.github/workflows/deploy-pages.yml`을 Actions 탭에서 수동 실행하면 프런트만
+GitHub Pages로 나갑니다. 위에 적은 쿠키 문제 때문에 **로그인과 게시판은 동작하지
+않습니다.** 화면과 디자인만 보여줄 때 쓰세요.
+
 ## 구조
 
 ```text
@@ -65,10 +123,19 @@ npm run test:all
 ├── src/
 │   ├── somni.js              # 실제 앱 화면과 API 상태
 │   ├── api-client.js         # Django 세션 API 클라이언트
-│   └── sleep-analysis.mjs    # 원본 수면 분석 계약
+│   ├── sleep-analysis.mjs    # 원본 수면 분석 계약
+│   └── community/            # 게시판 (두 화면이 공유)
+│       ├── index.mjs         # 서버 호출을 감싼 파사드
+│       ├── board.mjs         # 정렬·검색 같은 표시 로직
+│       ├── ui.mjs            # 공용 렌더러와 이벤트 처리
+│       └── common.mjs        # 공통 유틸
+├── community.css              # 게시판 전용 스타일 (밤·낮 테마)
+├── planner.html               # src/app.js 수면 계획 화면 진입점
 ├── backend/planner/
 │   ├── services.py           # 일정 기반 취침 계획
-│   └── sleep_analysis.py     # 서버 적응형 수면 분석
+│   ├── sleep_analysis.py     # 서버 적응형 수면 분석
+│   ├── models.py             # CommunityPost·Comment·PostLike 포함
+│   └── views.py              # /api/v1/community/… 엔드포인트
 └── tests/                     # JavaScript·Django 회귀 테스트
 ```
 

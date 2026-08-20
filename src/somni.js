@@ -1,4 +1,16 @@
 import { api } from "./api-client.js";
+import { createCommunity } from "./community/index.mjs";
+import {
+  createCommunityViewState,
+  handleCommunityClick,
+  handleCommunityInput,
+  handleCommunitySubmit,
+  renderCommunity,
+} from "./community/ui.mjs";
+
+// 게시판은 앱의 로그인 세션을 그대로 쓴다. 계정을 따로 만들지 않는다.
+const community = createCommunity({ client: api });
+const communityView = createCommunityViewState();
 
 const app = document.querySelector("#app");
 const storeKey = "somni-prototype-v2";
@@ -55,7 +67,7 @@ state.calendarConnections = {
 let toastTimer;
 let calendarSyncing = false;
 let lastAutomaticSync = 0;
-const icon = (name) => ({ home: "⌂", routine: "◌", report: "⌁", settings: "⚙", arrow: "→", check: "✓", moon: "☾", play: "▷", back: "‹", sound: "♬", breathe: "◌", journal: "✦", alarm: "◷", refresh: "↻" }[name] || "•");
+const icon = (name) => ({ home: "⌂", routine: "◌", community: "◇", report: "⌁", settings: "⚙", arrow: "→", check: "✓", moon: "☾", play: "▷", back: "‹", sound: "♬", breathe: "◌", journal: "✦", alarm: "◷", refresh: "↻" }[name] || "•");
 
 function persist() {
   localStorage.setItem(storeKey, JSON.stringify(state));
@@ -236,7 +248,7 @@ function character(kind = state.companion, emotion = "yawning", size = "") {
 }
 
 function shell(content) {
-  const tabs = [["home", "home", "홈"], ["routine", "routine", "루틴"], ["report", "report", "리포트"], ["settings", "settings", "설정"]];
+  const tabs = [["home", "home", "홈"], ["routine", "routine", "루틴"], ["community", "community", "커뮤니티"], ["report", "report", "리포트"], ["settings", "settings", "설정"]];
   return `<main class="phone" aria-label="밤가이 수면 앱"><div class="safe-top"><span>9:41</span><span>${state.backendConnected ? "● SYNC" : "● DEMO"}</span></div>${content}
     <nav class="tabbar" aria-label="메인 메뉴">${tabs.map(([id, i, label]) => `<button data-screen="${id}" class="${state.screen === id ? "active" : ""}"><i>${icon(i)}</i><span>${label}</span></button>`).join("")}</nav></main>`;
 }
@@ -363,11 +375,15 @@ function sleep() {
   return `<main class="sleep-screen lock-screen"><div class="lock-wallpaper"></div><div class="ios-status"><strong>${formatClock()}</strong><span class="dynamic-island"></span><span class="status-icons">▮▮▮ ⌁ ▰</span></div><div class="expand-hint">⌄ 탭하여 펼치기</div><section class="lock-clock"><span>${formatLockDate()}</span><strong>${formatClock()}</strong></section><section class="live-activity" aria-label="밤가이 수면 Live Activity"><header><span class="live-app-icon"></span><b>밤가이</b><em>Live</em></header><div class="live-main"><div class="live-avatar">${character(state.companion, "sleeping", "live-character")}</div><div><h1>수면 기록 중</h1><p>${elapsed.label}</p></div></div><div class="live-progress"><i style="width:${elapsed.progress}%"></i></div><div class="live-meta"><span><small>시작 시각</small><b>${elapsed.startedAt}</b></span><span><small>알람 설정</small><b>${formatMeridiem(state.wake)}</b></span></div></section><button class="return-to-somni" data-end-sleep>밤가이로 돌아가 기상 체크</button><div class="home-indicator"></div></main>`;
 }
 
+function communityPage() {
+  return shell(`<section class="page community-page">${renderCommunity(community, communityView)}</section>`);
+}
+
 function render() {
   if (!state.authResolved) app.innerHTML = `<main class="auth-screen auth-loading"><span class="auth-logo">밤</span><p>내 리듬을 불러오는 중…</p></main>`;
   else if (!state.authenticated) app.innerHTML = authScreen();
   else if (!state.onboarding) onboarding();
-  else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, report, settings, checkin, "daytime-checkin": daytimeCheckin }[state.screen] || home)();
+  else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, community: communityPage, report, settings, checkin, "daytime-checkin": daytimeCheckin }[state.screen] || home)();
 }
 
 function showToast(message) {
@@ -471,10 +487,32 @@ async function saveDaytime() {
   showToast("낮 컨디션까지 기록했어요.");
 }
 
+// 세션이 끊기면 앱의 로그인 화면으로 되돌린다.
+function requireLogin() {
+  state.authenticated = false;
+  state.authResolved = true;
+  render();
+}
+
 app.addEventListener("click", async (event) => {
+  // 게시판은 button이 아닌 요소(글 카드)도 누를 수 있어서 아래 button 검사보다 먼저 물어본다.
+  const board = await handleCommunityClick(event, {
+    community,
+    view: communityView,
+    confirm: (message) => window.confirm(message),
+    onRequireLogin: requireLogin,
+  });
+  if (board.handled) {
+    if (board.toast) showToast(board.toast);
+    if (board.rerender !== false) render();
+    return;
+  }
+
   const button = event.target.closest("button");
   if (!button) return;
   if (button.type === "submit" && button.closest("[data-auth-form]")) return;
+  // 게시판 폼의 전송 버튼은 submit 리스너가 맡는다. 여기서 비활성화하면 전송이 막힌다.
+  if (button.type === "submit" && button.closest("[data-cm-form]")) return;
   button.disabled = true;
   try {
     if (button.dataset.next !== undefined) state.step += 1;
@@ -539,6 +577,21 @@ app.addEventListener("click", async (event) => {
 });
 
 app.addEventListener("submit", async (event) => {
+  // await보다 먼저 막아야 한다. 마이크로태스크로 넘어간 뒤에는 브라우저가 이미 폼을
+  // 전송한 뒤라, 비밀번호가 URL 쿼리로 새어 나간다.
+  if (event.target.closest("[data-auth-form], [data-cm-form]")) event.preventDefault();
+
+  const board = await handleCommunitySubmit(event, {
+    community,
+    view: communityView,
+    onRequireLogin: requireLogin,
+  });
+  if (board.handled) {
+    if (board.toast) showToast(board.toast);
+    render();
+    return;
+  }
+
   const form = event.target.closest("[data-auth-form]");
   if (!form) return;
   event.preventDefault();
@@ -553,6 +606,9 @@ app.addEventListener("submit", async (event) => {
     state.authResolved = true;
     state.backendConnected = true;
     persist();
+    render();
+    // 게시판은 시작할 때 한 번 읽고 끝나므로, 방금 생긴 세션으로 다시 읽어 준다.
+    await community.load();
     render();
   } catch (error) {
     showToast(error.message);
@@ -612,5 +668,15 @@ document.addEventListener("visibilitychange", () => {
 });
 globalThis.setInterval(() => syncCalendars("auto", { quiet: true }), 5 * 60_000);
 
+// 검색은 글자마다 다시 그리므로 입력 위치를 되돌려 준다.
+document.addEventListener("input", (event) => {
+  if (!handleCommunityInput(event, { view: communityView }).handled) return;
+  render();
+  const search = app.querySelector('[data-cm-input="query"]');
+  if (!search) return;
+  search.focus();
+  search.setSelectionRange(search.value.length, search.value.length);
+});
+
 render();
-loadBackend();
+loadBackend().finally(() => community.load().then(render, () => {}));

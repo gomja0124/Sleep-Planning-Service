@@ -1,0 +1,37 @@
+# Render Blueprint.
+#
+# Render 대시보드에서 New + → Blueprint를 고르고 이 저장소를 연결하면
+# 웹 서비스와 Postgres가 이 파일대로 한 번에 만들어진다.
+# 비밀 키는 Render가 생성하고, 서비스 주소는 RENDER_EXTERNAL_URL로 자동 주입되므로
+# 손으로 넣어야 하는 환경변수가 없다.
+#
+# Google Calendar를 쓰려면 배포 후 GOOGLE_CLIENT_ID와 GOOGLE_CLIENT_SECRET만
+# 대시보드에서 추가하면 된다. 없어도 나머지 기능은 정상 동작한다.
+
+databases:
+  - name: bamgai-db
+    databaseName: bamgai
+    plan: free
+
+services:
+  - type: web
+    name: bamgai
+    runtime: python
+    plan: free
+    branch: main
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn bamgai.wsgi:application --chdir backend --bind 0.0.0.0:$PORT"
+    healthCheckPath: /api/v1/health/
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bamgai-db
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.12.6"

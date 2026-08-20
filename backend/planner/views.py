@@ -16,7 +16,7 @@ from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.models import SocialAccount
 from allauth.socialaccount.providers.base.constants import AuthProcess
 
-from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityPost, Feedback, PlanOverride, Profile, Schedule, SleepSession
+from .models import CalendarConnection, Challenge, ChallengeParticipation, CommunityComment, CommunityPost, CommunityPostLike, Feedback, PlanOverride, Profile, Schedule, SleepSession
 from .services import date_from_string, recommendation, time_string
 from .calendar_services import CalendarIntegrationError, sync_apple_events, sync_google_calendar
 from .sleep_analysis import analyze_sleep_history
@@ -415,17 +415,164 @@ def challenge_join(request, challenge_id):
     return JsonResponse({"joined": False})
 
 
+POST_TYPE_VALUES = {value for value, _ in CommunityPost.POST_TYPES}
+TITLE_MAX = 160
+BODY_MAX = 1000
+COMMENT_MAX = 300
+
+
+def author_data(profile):
+    if profile is None:
+        return {"id": None, "nickname": "탈퇴한 사용자", "character": "owl"}
+    return {"id": profile.id, "nickname": profile.name, "character": profile.selected_character}
+
+
+def post_data(item, profile, comment_count=None, like_count=None):
+    return {
+        "id": item.id,
+        "type": item.post_type,
+        "title": item.title,
+        "body": item.body,
+        "meta": item.meta,
+        "author": author_data(item.author),
+        "createdAt": item.created_at.isoformat(),
+        "updatedAt": item.updated_at.isoformat() if item.updated_at else None,
+        "commentCount": item.comments.count() if comment_count is None else comment_count,
+        "likeCount": item.likes.count() if like_count is None else like_count,
+        "likedByViewer": item.likes.filter(profile=profile).exists(),
+        "ownedByViewer": item.author_id == profile.id,
+    }
+
+
+def comment_data(item, profile, post):
+    return {
+        "id": item.id,
+        "postId": item.post_id,
+        "body": item.body,
+        "author": author_data(item.author),
+        "createdAt": item.created_at.isoformat(),
+        "removableByViewer": item.author_id == profile.id or post.author_id == profile.id,
+    }
+
+
+def clean_post_fields(data):
+    """제목·본문·말머리를 검증해 돌려준다. 잘못되면 ValueError."""
+    post_type = data.get("type", "free")
+    if post_type not in POST_TYPE_VALUES:
+        raise ValueError("말머리를 선택해 주세요.")
+    title = str(data.get("title", "")).strip()
+    body = str(data.get("body", "")).strip()
+    if not 2 <= len(title) <= TITLE_MAX:
+        raise ValueError(f"제목은 2~{TITLE_MAX}자로 써 주세요.")
+    if not body:
+        raise ValueError("내용을 입력해 주세요.")
+    if len(body) > BODY_MAX:
+        raise ValueError(f"내용은 {BODY_MAX}자까지 쓸 수 있어요.")
+    return post_type, title, body
+
+
 @require_http_methods(["GET", "POST"])
 def community_posts(request):
     profile = profile_for(request)
     if request.method == "GET":
-        posts = CommunityPost.objects.order_by("-created_at")[:50]
-        return JsonResponse({"results": [{"id": item.id, "type": item.post_type, "title": item.title, "body": item.body, "meta": item.meta, "createdAt": item.created_at.isoformat()} for item in posts]})
+        posts = (CommunityPost.objects
+                 .select_related("author")
+                 .prefetch_related("comments", "likes")
+                 .order_by("-created_at", "-id")[:50])
+        return JsonResponse({"results": [post_data(item, profile) for item in posts]})
     try:
         data = payload(request)
-        item = CommunityPost.objects.create(author=profile, post_type=data.get("type", "recruitment"), title=data["title"], body=data["body"], meta=data.get("meta", ""))
-    except (KeyError, ValueError) as exc: return error(str(exc))
-    return JsonResponse({"id": item.id, "title": item.title}, status=201)
+        post_type, title, body = clean_post_fields(data)
+        item = CommunityPost.objects.create(
+            author=profile, post_type=post_type, title=title, body=body,
+            meta=str(data.get("meta", ""))[:160],
+        )
+    except (KeyError, ValueError) as exc:
+        return error(str(exc))
+    return JsonResponse(post_data(item, profile), status=201)
+
+
+@require_http_methods(["GET", "PATCH", "DELETE"])
+def community_post_detail(request, post_id):
+    profile = profile_for(request)
+    try:
+        item = CommunityPost.objects.select_related("author").get(id=post_id)
+    except CommunityPost.DoesNotExist:
+        return error("이미 삭제된 글이에요.", 404)
+
+    if request.method == "GET":
+        comments = item.comments.select_related("author")
+        return JsonResponse({
+            **post_data(item, profile),
+            "comments": [comment_data(comment, profile, item) for comment in comments],
+        })
+
+    if item.author_id != profile.id:
+        return error("내가 쓴 글만 수정하거나 삭제할 수 있어요.", 403)
+
+    if request.method == "DELETE":
+        item.delete()
+        return JsonResponse({"deleted": True})
+
+    try:
+        post_type, title, body = clean_post_fields(payload(request))
+    except (KeyError, ValueError) as exc:
+        return error(str(exc))
+    item.post_type, item.title, item.body = post_type, title, body
+    item.updated_at = timezone.now()
+    item.save(update_fields=["post_type", "title", "body", "updated_at"])
+    return JsonResponse(post_data(item, profile))
+
+
+@require_http_methods(["POST"])
+def community_post_like(request, post_id):
+    profile = profile_for(request)
+    try:
+        item = CommunityPost.objects.get(id=post_id)
+    except CommunityPost.DoesNotExist:
+        return error("이미 삭제된 글이에요.", 404)
+
+    like, created = CommunityPostLike.objects.get_or_create(post=item, profile=profile)
+    if not created:
+        like.delete()
+    return JsonResponse({"liked": created, "likeCount": item.likes.count()})
+
+
+@require_http_methods(["POST"])
+def community_post_comments(request, post_id):
+    profile = profile_for(request)
+    try:
+        item = CommunityPost.objects.select_related("author").get(id=post_id)
+    except CommunityPost.DoesNotExist:
+        return error("이미 삭제된 글이에요.", 404)
+
+    try:
+        body = str(payload(request).get("body", "")).strip()
+    except ValueError as exc:
+        return error(str(exc))
+    if not body:
+        return error("댓글 내용을 입력해 주세요.")
+    if len(body) > COMMENT_MAX:
+        return error(f"댓글은 {COMMENT_MAX}자까지 쓸 수 있어요.")
+
+    comment = CommunityComment.objects.create(post=item, author=profile, body=body)
+    return JsonResponse(comment_data(comment, profile, item), status=201)
+
+
+@require_http_methods(["DELETE"])
+def community_comment_detail(request, comment_id):
+    profile = profile_for(request)
+    try:
+        comment = CommunityComment.objects.select_related("post").get(id=comment_id)
+    except CommunityComment.DoesNotExist:
+        return error("이미 삭제된 댓글이에요.", 404)
+
+    # 댓글 작성자 본인과 글쓴이가 지울 수 있다.
+    if comment.author_id != profile.id and comment.post.author_id != profile.id:
+        return error("이 댓글을 삭제할 권한이 없어요.", 403)
+
+    comment.delete()
+    return JsonResponse({"deleted": True})
 
 @require_http_methods(["POST"])
 def google_calendar_sync(request):
