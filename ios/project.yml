@@ -1,0 +1,24 @@
+name: Somni
+options:
+  bundleIdPrefix: com.somni
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  Somni:
+    type: application
+    platform: iOS
+    sources: [Somni]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.somni.app
+        INFOPLIST_FILE: Somni/Info.plist
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Somni/Info.plist
+      properties:
+        CFBundleDisplayName: Somni
+        NSCalendarsFullAccessUsageDescription: Somni가 다음 일정에 맞춰 취침 및 기상 계획을 추천하기 위해 캘린더를 읽습니다.
+        NSCalendarsUsageDescription: Somni가 다음 일정에 맞춰 취침 및 기상 계획을 추천하기 위해 캘린더를 읽습니다.
+        SOMNI_BASE_URL: http://localhost:4173
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
