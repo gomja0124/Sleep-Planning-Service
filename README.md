@@ -77,31 +77,37 @@ npm run test:all
 
 ## 배포
 
-프런트와 백엔드를 따로 올립니다. **GitHub Pages만으로는 동작하지 않습니다.**
-Pages는 정적 파일만 서빙하는데 로그인·게시판·수면 계획이 전부 `/api/v1/` 호출이라,
-백엔드가 없으면 화면만 뜨고 모든 기능이 실패합니다.
+**Django가 프런트까지 같은 출처에서 서빙합니다.** 서비스 하나만 올리면 됩니다.
 
-**1. 백엔드** — Render·Railway처럼 파이썬을 돌릴 수 있는 곳에 올립니다.
-저장소에 `Procfile`이 있어서 릴리스 단계에서 마이그레이션과 정적 파일 수집이 돕니다.
+프런트와 API를 다른 사이트에 나눠 올리면 세션 쿠키가 크로스사이트 쿠키가 되는데,
+Safari와 Firefox는 이를 기본 차단합니다. 아이폰에서 로그인이 안 된다는 뜻이라
+수면 앱에는 치명적입니다. 같은 출처로 내보내면 이 문제가 생기지 않고 CORS도
+필요 없습니다.
+
+Render·Railway처럼 파이썬을 돌릴 수 있는 곳에 올립니다.
+
+- **Build Command** — `./build.sh` (의존성 설치, 프런트 복사, 정적 파일 수집, 마이그레이션)
+- **Start Command** — `gunicorn bamgai.wsgi:application --chdir backend --bind 0.0.0.0:$PORT`
+
 환경변수는 아래 네 개가 필수입니다.
 
 | 변수 | 값 | 없으면 |
 |---|---|---|
 | `DJANGO_DEBUG` | `false` | 예외 화면에 소스와 설정이 노출됩니다 |
 | `DJANGO_SECRET_KEY` | 길고 무작위한 값 | **서버가 아예 뜨지 않습니다** |
-| `DJANGO_ALLOWED_HOSTS` | 백엔드 도메인 | 모든 요청이 400 |
-| `FRONTEND_ORIGIN` | Pages 주소 | CORS와 쿠키가 막힙니다 |
+| `DJANGO_ALLOWED_HOSTS` | 배포 도메인 (예: `.onrender.com`) | 모든 요청이 400 |
+| `FRONTEND_ORIGIN` | 배포된 자기 주소 | 로그인 리디렉션이 로컬로 갑니다 |
 
 `DATABASE_URL`을 넣지 않으면 SQLite 파일을 쓰는데, 대부분의 PaaS는 재배포마다
 디스크를 초기화하므로 글이 사라집니다. Postgres를 붙이는 것을 권합니다.
 
-**2. 프런트** — `.github/workflows/deploy-pages.yml`이 `main` 푸시마다 Pages로
-배포합니다. 저장소 Variables에 `SOMNI_API_BASE`(1번에서 배포한 백엔드 주소)를
-등록해야 합니다. 값이 비어 있으면 워크플로가 일부러 실패합니다.
-잘못된 주소로 조용히 배포되는 것보다 낫기 때문입니다.
+`SOMNI_API_BASE`는 설정하지 않습니다. `src/api-client.js`가 알아서 자기 출처를 씁니다.
 
-두 주소가 서로를 가리켜야 합니다. 백엔드의 `FRONTEND_ORIGIN`이 Pages 주소,
-Pages의 `SOMNI_API_BASE`가 백엔드 주소입니다.
+### 정적 화면만 공유할 때
+
+`.github/workflows/deploy-pages.yml`을 Actions 탭에서 수동 실행하면 프런트만
+GitHub Pages로 나갑니다. 위에 적은 쿠키 문제 때문에 **로그인과 게시판은 동작하지
+않습니다.** 화면과 디자인만 보여줄 때 쓰세요.
 
 ## 구조
 

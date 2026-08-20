@@ -81,6 +81,16 @@ USE_I18N = True
 USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# 프런트를 같은 서비스에서 서빙한다.
+#
+# 프런트와 API가 다른 사이트에 있으면 세션 쿠키가 크로스사이트 쿠키가 되어
+# Safari와 Firefox가 기본 차단한다. 아이폰에서 로그인이 안 된다는 뜻이다.
+# 같은 출처에서 내보내면 그 문제가 아예 생기지 않고 CORS도 필요 없다.
+#
+# 배포 빌드에서 저장소 루트의 정적 파일을 frontend_dist로 복사한다.
+WHITENOISE_ROOT = BASE_DIR / "frontend_dist"
+WHITENOISE_INDEX_FILE = True
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
