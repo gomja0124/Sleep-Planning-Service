@@ -7,7 +7,7 @@ from allauth.socialaccount.providers.base.constants import AuthProcess
 from django.http import HttpResponseRedirect
 from django.test import TestCase, override_settings
 
-from .models import Profile, Schedule
+from .models import CommunityComment, Profile, Schedule
 from .sleep_analysis import analyze_sleep_history, calculate_bedtime_range_minutes
 
 
@@ -350,3 +350,153 @@ class PlannerAuthenticationTests(TestCase):
         self.json_request("post", "/api/v1/auth/logout/")
         duplicate = self.json_request("post", "/api/v1/auth/signup/", payload)
         self.assertEqual(duplicate.status_code, 409)
+
+
+class CommunityBoardTests(TestCase):
+    """게시판은 로그인 세션 위에서만 동작한다. 미들웨어가 /api/v1/ 전체를 막는다."""
+
+    def json_request(self, method, path, data=None):
+        return getattr(self.client, method)(
+            path,
+            data=json.dumps(data or {}),
+            content_type="application/json",
+        )
+
+    def sign_up(self, email, name):
+        response = self.json_request("post", "/api/v1/auth/signup/", {
+            "email": email,
+            "password": "safe-password-123",
+            "name": name,
+        })
+        self.assertEqual(response.status_code, 201)
+
+    def write_post(self, title="같이 12시에 자실 분", body="매일 11시 50분에 알림 보낼게요.", post_type="recruitment"):
+        response = self.json_request("post", "/api/v1/community/posts/", {
+            "type": post_type, "title": title, "body": body,
+        })
+        self.assertEqual(response.status_code, 201)
+        return response.json()
+
+    def setUp(self):
+        self.sign_up("min@example.com", "민밤")
+
+    def test_login_is_required_to_read_the_board(self):
+        self.json_request("post", "/api/v1/auth/logout/")
+        response = self.client.get("/api/v1/community/posts/")
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["loginUrl"], "/auth/")
+
+    def test_written_post_appears_on_top_with_author_and_counts(self):
+        self.write_post()
+
+        results = self.client.get("/api/v1/community/posts/").json()["results"]
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["title"], "같이 12시에 자실 분")
+        self.assertEqual(results[0]["author"]["nickname"], "민밤")
+        self.assertEqual(results[0]["commentCount"], 0)
+        self.assertEqual(results[0]["likeCount"], 0)
+        self.assertTrue(results[0]["ownedByViewer"])
+
+    def test_post_rejects_short_title_empty_body_and_unknown_type(self):
+        for payload, reason in [
+            ({"type": "free", "title": "짧", "body": "내용"}, "제목"),
+            ({"type": "free", "title": "제목입니다", "body": "   "}, "빈 본문"),
+            ({"type": "없는말머리", "title": "제목입니다", "body": "내용"}, "말머리"),
+            ({"type": "free", "title": "제목입니다", "body": "가" * 1001}, "본문 길이"),
+        ]:
+            response = self.json_request("post", "/api/v1/community/posts/", payload)
+            self.assertEqual(response.status_code, 400, reason)
+
+    def test_like_toggles_on_and_off(self):
+        post = self.write_post()
+
+        liked = self.json_request("post", f"/api/v1/community/posts/{post['id']}/like/").json()
+        self.assertEqual(liked, {"liked": True, "likeCount": 1})
+
+        unliked = self.json_request("post", f"/api/v1/community/posts/{post['id']}/like/").json()
+        self.assertEqual(unliked, {"liked": False, "likeCount": 0})
+
+    def test_comments_are_returned_with_the_post_in_written_order(self):
+        post = self.write_post()
+        self.json_request("post", f"/api/v1/community/posts/{post['id']}/comments/", {"body": "저는 12시요."})
+        self.json_request("post", f"/api/v1/community/posts/{post['id']}/comments/", {"body": "저는 1시쯤이요."})
+
+        detail = self.client.get(f"/api/v1/community/posts/{post['id']}/").json()
+        self.assertEqual([item["body"] for item in detail["comments"]], ["저는 12시요.", "저는 1시쯤이요."])
+        self.assertEqual(detail["commentCount"], 2)
+
+    def test_empty_and_overlong_comments_are_rejected(self):
+        post = self.write_post()
+        for body in ["   ", "가" * 301]:
+            response = self.json_request("post", f"/api/v1/community/posts/{post['id']}/comments/", {"body": body})
+            self.assertEqual(response.status_code, 400)
+
+    def test_editing_records_updated_at_and_keeps_author(self):
+        post = self.write_post()
+
+        response = self.json_request("patch", f"/api/v1/community/posts/{post['id']}/", {
+            "type": "question", "title": "고친 제목", "body": "고친 내용",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["title"], "고친 제목")
+        self.assertEqual(response.json()["type"], "question")
+        self.assertIsNotNone(response.json()["updatedAt"])
+
+    def test_other_people_cannot_edit_or_delete_a_post(self):
+        post = self.write_post()
+        self.json_request("post", "/api/v1/auth/logout/")
+        self.sign_up("other@example.com", "다른사람")
+
+        self.assertEqual(self.json_request("delete", f"/api/v1/community/posts/{post['id']}/").status_code, 403)
+        edit = self.json_request("patch", f"/api/v1/community/posts/{post['id']}/", {
+            "type": "free", "title": "바꿔치기", "body": "내용",
+        })
+        self.assertEqual(edit.status_code, 403)
+
+    def test_deleting_a_post_removes_its_comments(self):
+        post = self.write_post()
+        self.json_request("post", f"/api/v1/community/posts/{post['id']}/comments/", {"body": "댓글도 사라지나요?"})
+
+        self.assertEqual(self.json_request("delete", f"/api/v1/community/posts/{post['id']}/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/v1/community/posts/{post['id']}/").status_code, 404)
+        self.assertEqual(CommunityComment.objects.count(), 0)
+
+    def test_post_author_can_remove_someone_elses_comment(self):
+        post = self.write_post()
+
+        self.json_request("post", "/api/v1/auth/logout/")
+        self.sign_up("guest@example.com", "손님")
+        guest_comment = self.json_request(
+            "post", f"/api/v1/community/posts/{post['id']}/comments/", {"body": "지나갑니다."},
+        ).json()
+
+        self.json_request("post", "/api/v1/auth/logout/")
+        self.json_request("post", "/api/v1/auth/login/", {"email": "min@example.com", "password": "safe-password-123"})
+
+        response = self.json_request("delete", f"/api/v1/community/comments/{guest_comment['id']}/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(CommunityComment.objects.count(), 0)
+
+    def test_unrelated_person_cannot_remove_a_comment(self):
+        post = self.write_post()
+        comment = self.json_request(
+            "post", f"/api/v1/community/posts/{post['id']}/comments/", {"body": "제 댓글이에요."},
+        ).json()
+
+        self.json_request("post", "/api/v1/auth/logout/")
+        self.sign_up("stranger@example.com", "낯선사람")
+
+        response = self.json_request("delete", f"/api/v1/community/comments/{comment['id']}/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_viewer_specific_flags_are_per_account(self):
+        post = self.write_post()
+        self.json_request("post", f"/api/v1/community/posts/{post['id']}/like/")
+
+        self.json_request("post", "/api/v1/auth/logout/")
+        self.sign_up("reader@example.com", "독자")
+
+        results = self.client.get("/api/v1/community/posts/").json()["results"]
+        self.assertFalse(results[0]["ownedByViewer"])
+        self.assertFalse(results[0]["likedByViewer"])
+        self.assertEqual(results[0]["likeCount"], 1)

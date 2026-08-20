@@ -31,4 +31,8 @@ urlpatterns = [
     path("api/v1/challenges/", views.challenges),
     path("api/v1/challenges/<int:challenge_id>/join/", views.challenge_join),
     path("api/v1/community/posts/", views.community_posts),
+    path("api/v1/community/posts/<int:post_id>/", views.community_post_detail),
+    path("api/v1/community/posts/<int:post_id>/like/", views.community_post_like),
+    path("api/v1/community/posts/<int:post_id>/comments/", views.community_post_comments),
+    path("api/v1/community/comments/<int:comment_id>/", views.community_comment_detail),
 ]

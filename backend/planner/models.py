@@ -121,10 +121,39 @@ class ChallengeParticipation(models.Model):
 
 
 class CommunityPost(models.Model):
-    POST_TYPES = [("recruitment", "모집"), ("challenge", "도전"), ("season", "시즌")]
+    # recruitment·challenge·season은 기존 데이터를 위해 유지하고, 사용자가 직접 쓰는
+    # 말머리 세 가지를 뒤에 덧붙였다.
+    POST_TYPES = [
+        ("recruitment", "모집"),
+        ("challenge", "도전"),
+        ("season", "시즌"),
+        ("proof", "인증"),
+        ("question", "질문"),
+        ("free", "자유"),
+    ]
     post_type = models.CharField(max_length=16, choices=POST_TYPES)
     title = models.CharField(max_length=160)
     body = models.TextField(max_length=1000)
     meta = models.CharField(max_length=160, blank=True)
     author = models.ForeignKey(Profile, null=True, blank=True, on_delete=models.SET_NULL, related_name="posts")
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(null=True, blank=True)
+
+
+class CommunityComment(models.Model):
+    post = models.ForeignKey(CommunityPost, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(Profile, null=True, blank=True, on_delete=models.SET_NULL, related_name="community_comments")
+    body = models.TextField(max_length=300)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+
+class CommunityPostLike(models.Model):
+    post = models.ForeignKey(CommunityPost, on_delete=models.CASCADE, related_name="likes")
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="post_likes")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["post", "profile"], name="one_post_like")]
