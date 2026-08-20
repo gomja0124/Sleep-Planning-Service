@@ -10,12 +10,19 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 SLEEP_RECORD_TEST_MODE = DEBUG and os.environ.get("SLEEP_RECORD_TEST_MODE", "true").lower() == "true"
 # 데모 계정은 로그인 없이 모든 API를 열어 주므로 개발 환경에서만 허용한다.
 ALLOW_DEMO_USER = DEBUG and os.environ.get("DJANGO_ALLOW_DEMO_USER", "false").lower() == "true"
-FRONTEND_ORIGIN = os.environ.get("FRONTEND_ORIGIN", "http://localhost:4173").rstrip("/")
+# Render는 서비스 주소를 RENDER_EXTERNAL_URL로 자동 주입한다. 배포 전에는 주소를
+# 알 수 없으므로, 직접 지정하지 않으면 그 값을 쓴다. 손으로 넣고 재배포할 필요가 없다.
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL", "")
+FRONTEND_ORIGIN = (
+    os.environ.get("FRONTEND_ORIGIN") or RENDER_EXTERNAL_URL or "http://localhost:4173"
+).rstrip("/")
 
 # 배포 도메인은 DJANGO_ALLOWED_HOSTS에 쉼표로 구분해 넣는다.
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver"] + [
     host.strip() for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",") if host.strip()
 ]
+if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
+    ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
 # 개발용 기본 키로 운영에 뜨면 세션과 CSRF 토큰을 누구나 위조할 수 있다.
 if not DEBUG and SECRET_KEY == DEVELOPMENT_SECRET_KEY:

@@ -84,22 +84,25 @@ Safari와 Firefox는 이를 기본 차단합니다. 아이폰에서 로그인이
 수면 앱에는 치명적입니다. 같은 출처로 내보내면 이 문제가 생기지 않고 CORS도
 필요 없습니다.
 
-Render·Railway처럼 파이썬을 돌릴 수 있는 곳에 올립니다.
+Render 기준으로는 저장소에 `render.yaml`이 있어 **Blueprint로 한 번에** 만들어집니다.
+대시보드에서 New + → Blueprint → 이 저장소를 고르면 웹 서비스와 Postgres가 함께
+생성되고, 비밀 키는 Render가 생성합니다. 손으로 넣어야 하는 환경변수가 없습니다.
+
+직접 설정할 때는 아래 두 명령을 씁니다.
 
 - **Build Command** — `./build.sh` (의존성 설치, 프런트 복사, 정적 파일 수집, 마이그레이션)
 - **Start Command** — `gunicorn bamgai.wsgi:application --chdir backend --bind 0.0.0.0:$PORT`
-
-환경변수는 아래 네 개가 필수입니다.
 
 | 변수 | 값 | 없으면 |
 |---|---|---|
 | `DJANGO_DEBUG` | `false` | 예외 화면에 소스와 설정이 노출됩니다 |
 | `DJANGO_SECRET_KEY` | 길고 무작위한 값 | **서버가 아예 뜨지 않습니다** |
 | `DJANGO_ALLOWED_HOSTS` | 배포 도메인 (예: `.onrender.com`) | 모든 요청이 400 |
-| `FRONTEND_ORIGIN` | 배포된 자기 주소 | 로그인 리디렉션이 로컬로 갑니다 |
+| `DATABASE_URL` | Postgres 연결 문자열 | 재배포마다 글이 사라집니다 |
 
-`DATABASE_URL`을 넣지 않으면 SQLite 파일을 쓰는데, 대부분의 PaaS는 재배포마다
-디스크를 초기화하므로 글이 사라집니다. Postgres를 붙이는 것을 권합니다.
+`FRONTEND_ORIGIN`은 지정하지 않으면 Render가 주입하는 `RENDER_EXTERNAL_URL`을
+씁니다. 배포 전에는 주소를 알 수 없으므로, 직접 넣고 재배포할 필요가 없습니다.
+다른 호스팅을 쓴다면 배포된 자기 주소를 직접 넣으세요.
 
 `SOMNI_API_BASE`는 설정하지 않습니다. `src/api-client.js`가 알아서 자기 출처를 씁니다.
 
