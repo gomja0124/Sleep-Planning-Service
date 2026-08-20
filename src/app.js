@@ -204,7 +204,10 @@ function getPlans() {
     feedback: [],
     startDate: addDays(new Date(), 1),
     days: 7,
-  }).map((plan) => applyPlanOffset(plan, state.planOverrides[plan.targetDate] ?? 0));
+  }).map((plan) => applyPlanOffset(
+    plan,
+    (state.planOverrides[plan.targetDate] ?? 0) + (analysis.recommendedBedtimeOffsetMinutes ?? 0),
+  ));
 }
 
 function getSleepAnalysis() {
