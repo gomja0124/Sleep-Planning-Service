@@ -290,9 +290,15 @@
   color: var(--cm-ink);
 }
 
-.cm-chip-recruit {
+.cm-chip-recruitment {
   background: rgba(179, 161, 255, 0.22);
   color: #b3a1ff;
+}
+
+.cm-chip-challenge,
+.cm-chip-season {
+  background: rgba(216, 255, 115, 0.2);
+  color: #9cb84f;
 }
 
 .cm-chip-proof {

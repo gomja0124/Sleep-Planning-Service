@@ -9,6 +9,7 @@ import {
   generateRecommendations,
 } from "./planner.mjs";
 import { analyzeSleepHistory } from "./sleep-analysis.mjs";
+import { api } from "./api-client.js";
 import { createCommunity } from "./community/index.mjs";
 import {
   createCommunityViewState,
@@ -20,9 +21,11 @@ import {
 
 const STORAGE_KEY = "bamgai-demo-v1";
 
-// 게시판은 somni.js와 같은 모듈·같은 저장소를 쓴다. 어느 화면에서 글을 써도 함께 보인다.
-const community = createCommunity();
+// 게시판은 somni.js와 같은 모듈·같은 서버를 쓴다. 어느 화면에서 글을 써도 함께 보인다.
+// 이 화면에는 로그인 UI가 없어서, 로그인이 필요하면 서버의 로그인 페이지로 보낸다.
+const community = createCommunity({ client: api });
 const communityView = createCommunityViewState();
+const goToLogin = () => { location.href = api.loginUrl; };
 
 const CHARACTER_OPTIONS = {
   owl: {
@@ -780,6 +783,7 @@ document.addEventListener("click", async (event) => {
     community,
     view: communityView,
     confirm: (message) => window.confirm(message),
+    onRequireLogin: goToLogin,
   });
   if (board.handled) {
     if (board.toast) toast(board.toast);
@@ -977,7 +981,7 @@ document.addEventListener("submit", async (event) => {
   // await보다 먼저 막아야 한다. 마이크로태스크로 넘어간 뒤에는 브라우저가 이미 폼을 보낸 뒤다.
   event.preventDefault();
 
-  const board = await handleCommunitySubmit(event, { community, view: communityView });
+  const board = await handleCommunitySubmit(event, { community, view: communityView, onRequireLogin: goToLogin });
   if (board.handled) {
     if (board.toast) toast(board.toast);
     else render();
@@ -1115,4 +1119,4 @@ document.addEventListener("input", (event) => {
 });
 
 render();
-community.load().catch(() => {}).finally(render);
+community.load().then(render, () => render());

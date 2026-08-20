@@ -1,54 +1,52 @@
 // 커뮤니티 기능의 단일 진입점.
 //
-// 화면(app.js, somni.js)은 이 파사드만 알면 되고, 저장소가 localStorage인지 서버인지는
-// 모른다. 서버를 붙일 때는 store를 fetch 구현으로 바꾸거나, 아래 메서드 본문을
-// 그대로 fetch 호출로 치환하면 된다. 조회는 동기, 변경은 비동기로 나눠 두어서
-// 화면은 항상 메모리에 있는 최신 상태를 바로 그릴 수 있다.
+// 화면(somni.js, app.js)은 이 파사드만 알면 된다. 데이터는 전부 Django 백엔드에
+// 있고, 로그인 세션은 앱이 이미 쓰고 있는 것을 그대로 따라간다. 이 모듈은 계정을
+// 따로 만들지 않는다.
+//
+// 조회는 동기(캐시된 배열), 변경은 비동기(서버 왕복 후 캐시 갱신)로 나눠 두어서
+// 화면은 항상 최신 상태를 바로 그릴 수 있다.
 
-import { CommunityError } from "./common.mjs";
-import * as auth from "./auth.mjs";
-import * as board from "./board.mjs";
-import { seedDatabase } from "./seed.mjs";
-import {
-  createLocalSessionStore,
-  createLocalStore,
-  emptyDatabase,
-} from "./store.mjs";
+import { listPosts } from "./board.mjs";
 
-export { CommunityError } from "./common.mjs";
-export { POST_CATEGORIES } from "./board.mjs";
+export { POST_CATEGORIES, SYSTEM_CATEGORIES, categoryLabel } from "./board.mjs";
 export { relativeTime } from "./common.mjs";
 
-export function createCommunity({ store = createLocalStore(), sessionStore = createLocalSessionStore(), seed = true } = {}) {
-  let database = emptyDatabase();
-  let token = null;
+// client는 api-client.js의 api 객체다. 여기서 직접 import하지 않는 이유는
+// api-client.js가 모듈을 읽는 순간 location을 건드려서 Node 테스트에서 깨지기 때문이다.
+export function createCommunity({ client }) {
+  let posts = [];
+  let openPost = null;
   let viewer = null;
   let loaded = false;
 
-  async function persist() {
-    await store.write(database);
+  function adoptPost(updated) {
+    posts = posts.map((post) => (post.id === updated.id ? { ...post, ...updated } : post));
+    if (openPost?.id === updated.id) openPost = { ...openPost, ...updated };
   }
 
-  function refreshViewer() {
-    viewer = auth.userForToken(database, token);
-    return viewer;
-  }
-
-  function requireViewer() {
-    if (!viewer) {
-      throw new CommunityError("not_signed_in", "로그인이 필요한 기능이에요.");
-    }
-    return viewer;
+  async function refreshPosts() {
+    const data = await client.communityPosts();
+    posts = data.results ?? [];
+    return posts;
   }
 
   return {
+    // 로그인하지 않았으면 401이 나므로, 게시판은 비어 있는 채로 로그인 안내를 띄운다.
     async load() {
-      database = await store.read();
-      if (seed) seedDatabase(database);
-      token = await sessionStore.read();
-      refreshViewer();
+      try {
+        const data = await client.me();
+        viewer = {
+          id: data.id ?? null,
+          nickname: data.profile?.name ?? "나",
+          character: data.selectedCharacter ?? "owl",
+        };
+        await refreshPosts();
+      } catch {
+        viewer = null;
+        posts = [];
+      }
       loaded = true;
-      await persist();
       return viewer;
     },
 
@@ -64,89 +62,74 @@ export function createCommunity({ store = createLocalStore(), sessionStore = cre
       return Boolean(viewer);
     },
 
-    async signUp(input) {
-      const result = await auth.signUp(database, input);
-      token = result.session.token;
-      await sessionStore.write(token);
-      refreshViewer();
-      await persist();
-      return result.user;
-    },
-
-    async signIn(input) {
-      const result = await auth.signIn(database, input);
-      token = result.session.token;
-      await sessionStore.write(token);
-      refreshViewer();
-      await persist();
-      return result.user;
-    },
-
-    async signOut() {
-      auth.signOut(database, token);
-      token = null;
-      viewer = null;
-      await sessionStore.write(null);
-      await persist();
+    get openPost() {
+      return openPost;
     },
 
     listPosts(options = {}) {
-      return board.listPosts(database, { ...options, viewerId: viewer?.id ?? null });
+      return listPosts(posts, options);
     },
 
-    getPost(postId) {
-      return board.getPost(database, postId, viewer?.id ?? null);
+    countPosts() {
+      return posts.length;
     },
 
-    countPosts(category = null) {
-      return database.posts.filter((post) => (category ? post.category === category : true)).length;
+    async refresh() {
+      return refreshPosts();
+    },
+
+    async loadPost(postId) {
+      openPost = await client.communityPost(postId);
+      return openPost;
+    },
+
+    closePost() {
+      openPost = null;
     },
 
     async createPost({ category, title, body }) {
-      const user = requireViewer();
-      const post = board.createPost(database, { authorId: user.id, category, title, body });
-      await persist();
+      const post = await client.createCommunityPost({ type: category, title, body });
+      await refreshPosts();
+      openPost = await client.communityPost(post.id);
       return post;
     },
 
     async updatePost({ postId, category, title, body }) {
-      const user = requireViewer();
-      const post = board.updatePost(database, { postId, actorId: user.id, category, title, body });
-      await persist();
+      const post = await client.updateCommunityPost(postId, { type: category, title, body });
+      await refreshPosts();
+      openPost = await client.communityPost(postId);
       return post;
     },
 
     async deletePost(postId) {
-      const user = requireViewer();
-      const post = board.deletePost(database, { postId, actorId: user.id });
-      await persist();
-      return post;
+      await client.deleteCommunityPost(postId);
+      posts = posts.filter((post) => post.id !== postId);
+      if (openPost?.id === postId) openPost = null;
     },
 
     async toggleLike(postId) {
-      const user = requireViewer();
-      const result = board.toggleLike(database, { postId, actorId: user.id });
-      await persist();
+      const result = await client.likeCommunityPost(postId);
+      adoptPost({ id: postId, likeCount: result.likeCount, likedByViewer: result.liked });
       return result;
     },
 
     async addComment({ postId, body }) {
-      const user = requireViewer();
-      const comment = board.addComment(database, { postId, authorId: user.id, body });
-      await persist();
+      const comment = await client.addCommunityComment(postId, body);
+      if (openPost?.id !== postId) return comment;
+
+      const comments = [...openPost.comments, comment];
+      openPost = { ...openPost, comments, commentCount: comments.length };
+      adoptPost({ id: postId, commentCount: comments.length });
       return comment;
     },
 
     async deleteComment(commentId) {
-      const user = requireViewer();
-      const comment = board.deleteComment(database, { commentId, actorId: user.id });
-      await persist();
-      return comment;
-    },
+      await client.deleteCommunityComment(commentId);
+      if (!openPost) return;
 
-    // 테스트와 디버깅용. 화면에서는 쓰지 않는다.
-    snapshot() {
-      return JSON.parse(JSON.stringify(database));
+      const comments = openPost.comments.filter((comment) => comment.id !== commentId);
+      openPost = { ...openPost, comments, commentCount: comments.length };
+      adoptPost({ id: openPost.id, commentCount: comments.length });
     },
   };
 }
