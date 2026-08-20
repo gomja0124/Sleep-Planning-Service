@@ -1,6 +1,6 @@
 # iOS Apple Calendar bridge
 
-Somni's web UI and Django API receive EventKit changes. The native implementation lives in `ios/Somni/AppleCalendarBridge.swift`; a web page alone cannot read Apple Calendar.
+밤가이 web UI and Django API receive EventKit changes. The native implementation lives in `ios/Bamgai/AppleCalendarBridge.swift`; a web page alone cannot read Apple Calendar.
 
 ## Build the iOS shell
 
@@ -10,10 +10,10 @@ The `ios/project.yml` file is an XcodeGen project definition:
 brew install xcodegen
 cd ios
 xcodegen generate
-open Somni.xcodeproj
+open Bamgai.xcodeproj
 ```
 
-For the simulator, `SOMNI_BASE_URL` defaults to `http://localhost:4173`. A physical iPhone cannot use the Mac's `localhost`; change it to the Mac's LAN URL or a deployed HTTPS frontend. Select a Development Team and run the `Somni` target.
+For the simulator, `SOMNI_BASE_URL` defaults to `http://localhost:4173`. A physical iPhone cannot use the Mac's `localhost`; change it to the Mac's LAN URL or a deployed HTTPS frontend. Select a Development Team and run the `Bamgai` target.
 
 The generated Info.plist contains both `NSCalendarsFullAccessUsageDescription` for iOS 17+ and `NSCalendarsUsageDescription` for iOS 16.
 

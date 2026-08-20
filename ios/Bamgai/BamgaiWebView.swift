@@ -1,12 +1,12 @@
 import SwiftUI
 import WebKit
 
-final class SomniWebViewModel: ObservableObject {
+final class BamgaiWebViewModel: ObservableObject {
     weak var calendarBridge: AppleCalendarBridge?
 }
 
-struct SomniWebView: UIViewRepresentable {
-    @ObservedObject var model: SomniWebViewModel
+struct BamgaiWebView: UIViewRepresentable {
+    @ObservedObject var model: BamgaiWebViewModel
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -41,7 +41,7 @@ struct SomniWebView: UIViewRepresentable {
     final class Coordinator: NSObject, WKNavigationDelegate {
         let calendarBridge = AppleCalendarBridge()
 
-        init(model: SomniWebViewModel) {
+        init(model: BamgaiWebViewModel) {
             super.init()
         }
 

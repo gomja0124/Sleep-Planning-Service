@@ -237,23 +237,23 @@ function character(kind = state.companion, emotion = "yawning", size = "") {
 
 function shell(content) {
   const tabs = [["home", "home", "홈"], ["routine", "routine", "루틴"], ["report", "report", "리포트"], ["settings", "settings", "설정"]];
-  return `<main class="phone" aria-label="Somni 수면 앱"><div class="safe-top"><span>9:41</span><span>${state.backendConnected ? "● SYNC" : "● DEMO"}</span></div>${content}
+  return `<main class="phone" aria-label="밤가이 수면 앱"><div class="safe-top"><span>9:41</span><span>${state.backendConnected ? "● SYNC" : "● DEMO"}</span></div>${content}
     <nav class="tabbar" aria-label="메인 메뉴">${tabs.map(([id, i, label]) => `<button data-screen="${id}" class="${state.screen === id ? "active" : ""}"><i>${icon(i)}</i><span>${label}</span></button>`).join("")}</nav></main>`;
 }
 
 function authScreen() {
   if (state.authMode === "login" || state.authMode === "signup") {
     const signup = state.authMode === "signup";
-    return `<main class="auth-screen"><div class="auth-stars"></div><button class="auth-back" data-auth-mode="welcome">${icon("back")}</button><section class="auth-copy"><span class="auth-logo">S</span><span class="eyebrow">SOMNI ACCOUNT</span><h1>${signup ? "처음 만났네요.\n함께 밤을 준비해요." : "다시 만나서\n반가워요."}</h1><p>${signup ? "계정을 만들면 수면 기록과 캘린더가 안전하게 동기화돼요." : "내 수면 리듬을 이어서 기록해 볼까요?"}</p></section><form class="auth-form" data-auth-form="${state.authMode}">${signup ? `<label>이름<input name="name" autocomplete="name" required maxlength="40" placeholder="이름"></label>` : ""}<label>이메일<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label><label>비밀번호<input name="password" type="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="8" required placeholder="8자 이상"></label><button class="primary" type="submit">${signup ? "회원가입하고 시작하기" : "로그인"} ${icon("arrow")}</button></form><button class="auth-switch" data-auth-mode="${signup ? "login" : "signup"}">${signup ? "이미 계정이 있나요? 로그인" : "처음이신가요? 회원가입"}</button></main>`;
+    return `<main class="auth-screen"><div class="auth-stars"></div><button class="auth-back" data-auth-mode="welcome">${icon("back")}</button><section class="auth-copy"><span class="auth-logo">밤</span><span class="eyebrow">밤가이 ACCOUNT</span><h1>${signup ? "처음 만났네요.\n함께 밤을 준비해요." : "다시 만나서\n반가워요."}</h1><p>${signup ? "계정을 만들면 수면 기록과 캘린더가 안전하게 동기화돼요." : "내 수면 리듬을 이어서 기록해 볼까요?"}</p></section><form class="auth-form" data-auth-form="${state.authMode}">${signup ? `<label>이름<input name="name" autocomplete="name" required maxlength="40" placeholder="이름"></label>` : ""}<label>이메일<input name="email" type="email" autocomplete="email" required placeholder="you@example.com"></label><label>비밀번호<input name="password" type="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="8" required placeholder="8자 이상"></label><button class="primary" type="submit">${signup ? "회원가입하고 시작하기" : "로그인"} ${icon("arrow")}</button></form><button class="auth-switch" data-auth-mode="${signup ? "login" : "signup"}">${signup ? "이미 계정이 있나요? 로그인" : "처음이신가요? 회원가입"}</button></main>`;
   }
-  return `<main class="auth-screen auth-welcome"><div class="auth-stars"></div><section class="auth-copy"><span class="auth-logo">S</span><span class="eyebrow">SOMNI</span><h1>나만의 밤을\n시작해 볼까요?</h1><p>계정을 만들면 수면 기록과 일정을\n어떤 기기에서든 이어갈 수 있어요.</p></section><section class="auth-actions"><button class="primary" data-auth-mode="signup">회원가입 ${icon("arrow")}</button><button class="auth-secondary" data-auth-mode="login">이미 계정이 있어요</button><div class="auth-divider"><span>또는</span></div><button class="social-login google" data-social-login="google" ${state.socialProviders.google ? "" : "disabled"}><b>G</b> Google로 ${state.socialProviders.google ? "계속하기" : "준비 중"}</button><button class="social-login apple" data-social-login="apple" ${state.socialProviders.apple ? "" : "disabled"}><b>●</b> Apple로 ${state.socialProviders.apple ? "계속하기" : "준비 중"}</button></section></main>`;
+  return `<main class="auth-screen auth-welcome"><div class="auth-stars"></div><section class="auth-copy"><span class="auth-logo">밤</span><span class="eyebrow">밤가이</span><h1>나만의 밤을\n시작해 볼까요?</h1><p>계정을 만들면 수면 기록과 일정을\n어떤 기기에서든 이어갈 수 있어요.</p></section><section class="auth-actions"><button class="primary" data-auth-mode="signup">회원가입 ${icon("arrow")}</button><button class="auth-secondary" data-auth-mode="login">이미 계정이 있어요</button><div class="auth-divider"><span>또는</span></div><button class="social-login google" data-social-login="google" ${state.socialProviders.google ? "" : "disabled"}><b>G</b> Google로 ${state.socialProviders.google ? "계속하기" : "준비 중"}</button><button class="social-login apple" data-social-login="apple" ${state.socialProviders.apple ? "" : "disabled"}><b>●</b> Apple로 ${state.socialProviders.apple ? "계속하기" : "준비 중"}</button></section></main>`;
 }
 
 function onboarding() {
   const selected = companions[state.companion];
   let body = "";
-  if (state.step === 0) body = `<section class="onboard welcome"><div class="sky"></div><span class="eyebrow">SOMNI</span>${character("cat", "sleeping", "xl")}
-    <div><h1>오늘 밤을<br>조금 더 편안하게.</h1><p>Somni는 부담 없는 작은 루틴으로<br>당신의 밤을 함께 정리해요.</p></div><button class="primary" data-next>시작하기 ${icon("arrow")}</button></section>`;
+  if (state.step === 0) body = `<section class="onboard welcome"><div class="sky"></div><span class="eyebrow">밤가이</span>${character("cat", "sleeping", "xl")}
+    <div><h1>오늘 밤을<br>조금 더 편안하게.</h1><p>밤가이는 부담 없는 작은 루틴으로<br>당신의 밤을 함께 정리해요.</p></div><button class="primary" data-next>시작하기 ${icon("arrow")}</button></section>`;
   if (state.step === 1) body = `<section class="onboard choose"><button class="back" data-prev>${icon("back")}</button><span class="eyebrow">YOUR COMPANION · 1/2</span><h1>오늘 밤을 함께할<br>친구를 골라주세요.</h1><p>언제든 설정에서 바꿀 수 있어요.</p><div class="companion-list">${Object.entries(companions).map(([id, c]) => `<button data-companion="${id}" class="companion-card ${id === state.companion ? "selected" : ""}">${character(id, "yawning", "card-art")}<span><b>${c.ko}</b><small>${c.label}</small></span><i>${id === state.companion ? icon("check") : ""}</i></button>`).join("")}</div><button class="primary" data-next>${selected.ko}와 시작하기 ${icon("arrow")}</button></section>`;
   if (state.step === 2) body = `<section class="onboard schedule"><button class="back" data-prev>${icon("back")}</button><span class="eyebrow">YOUR RHYTHM · 2/2</span>${character(state.companion, "yawning", "setup-art")}<h1>나만의 밤을<br>설정해 볼까요?</h1><p>완벽하지 않아도 괜찮아요. 바꾸고 싶을 때 언제든 조절할 수 있어요.</p><div class="time-sheet"><label>잠들고 싶은 시간 <input type="time" data-time="bedtime" value="${state.bedtime}"></label><label>일어나고 싶은 시간 <input type="time" data-time="wake" value="${state.wake}"></label></div><button class="primary" data-complete>내 리듬 만들기 ${icon("arrow")}</button></section>`;
   app.innerHTML = body;
@@ -295,7 +295,10 @@ function report() {
   const analysis = state.sleepAnalysis;
   const analysisLabel = ({ INSUFFICIENT_DATA: "기록을 모으는 중", INSUFFICIENT_SLEEP: "수면 시간 확보 필요", LOW_CONDITION_DESPITE_DURATION: "목표 수면 탐색 중", IRREGULAR_TIMING: "취침 리듬 안정화", STABLE: "안정적인 수면 리듬", NO_CLEAR_PATTERN: "패턴 관찰 중" })[analysis?.primaryState] ?? "나의 리듬 분석 중";
   const analysisReason = analysis?.reasons?.[0]?.message ?? "3번 이상 기록하면 수면 패턴을 분석해요.";
-  return shell(`<section class="page report-page"><header><div><span class="eyebrow">SLEEP REPORT</span><h1>지난밤의<br>편안한 기록.</h1></div>${character(state.companion, "sleeping", "header-art")}</header><section class="report-card"><span>${displayedRecord?.date ?? "최근 기록"}</span><div><strong>${hours}<small>h</small> ${mins}<small>m</small></strong><p>수면 시간</p></div><div class="sleep-bar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>${actualSleep} 취침 <b>·</b> ${actualWake} 기상</small></section><section class="feedback"><span class="soft-icon">✦</span><div><b>${state.pendingFeedback ? "아침 기록을 임시 저장했어요." : "조금씩 내 리듬에 가까워지고 있어요."}</b><p>${pendingCopy}</p></div></section><section class="analysis-card"><span class="eyebrow">PERSONAL ANALYSIS</span><div><b>${analysisLabel}</b><em>${analysis?.confidence ? `신뢰도 ${analysis.confidence.toUpperCase()}` : "LEARNING"}</em></div><p>${analysisReason}</p>${analysis?.suggestedAdjustmentMinutes ? `<small>다음 목표 수면을 ${analysis.suggestedAdjustmentMinutes}분 늘려 탐색해요.</small>` : ""}</section><section class="section-title"><div><span class="eyebrow">THIS WEEK</span><h2>나의 수면 리듬</h2></div><button>7일</button></section><div class="chart">${[58, 72, 48, 80, 64, 88, 70].map((height, index) => `<span><i style="height:${height}%"></i><small>${"M T W T F S S".split(" ")[index]}</small></span>`).join("")}</div></section>`);
+  const bedtimeCorrection = analysis?.recommendedBedtimeOffsetMinutes
+    ? `<small>취침 패턴을 반영해 권장 시각을 ${Math.abs(analysis.recommendedBedtimeOffsetMinutes)}분 ${analysis.recommendedBedtimeOffsetMinutes < 0 ? "앞당겼어요" : "늦췄어요"}.</small>`
+    : "";
+  return shell(`<section class="page report-page"><header><div><span class="eyebrow">SLEEP REPORT</span><h1>지난밤의<br>편안한 기록.</h1></div>${character(state.companion, "sleeping", "header-art")}</header><section class="report-card"><span>${displayedRecord?.date ?? "최근 기록"}</span><div><strong>${hours}<small>h</small> ${mins}<small>m</small></strong><p>수면 시간</p></div><div class="sleep-bar"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><small>${actualSleep} 취침 <b>·</b> ${actualWake} 기상</small></section><section class="feedback"><span class="soft-icon">✦</span><div><b>${state.pendingFeedback ? "아침 기록을 임시 저장했어요." : "조금씩 내 리듬에 가까워지고 있어요."}</b><p>${pendingCopy}</p></div></section><section class="analysis-card"><span class="eyebrow">PERSONAL ANALYSIS</span><div><b>${analysisLabel}</b><em>${analysis?.confidence ? `신뢰도 ${analysis.confidence.toUpperCase()}` : "LEARNING"}</em></div><p>${analysisReason}</p>${analysis?.suggestedAdjustmentMinutes ? `<small>다음 목표 수면을 ${analysis.suggestedAdjustmentMinutes}분 늘려 탐색해요.</small>` : ""}${bedtimeCorrection}</section><section class="section-title"><div><span class="eyebrow">THIS WEEK</span><h2>나의 수면 리듬</h2></div><button>7일</button></section><div class="chart">${[58, 72, 48, 80, 64, 88, 70].map((height, index) => `<span><i style="height:${height}%"></i><small>${"M T W T F S S".split(" ")[index]}</small></span>`).join("")}</div></section>`);
 }
 
 function checkin() {
@@ -357,11 +360,11 @@ async function syncCalendars(mode = "manual", { quiet = false } = {}) {
 
 function sleep() {
   const elapsed = elapsedSleep();
-  return `<main class="sleep-screen lock-screen"><div class="lock-wallpaper"></div><div class="ios-status"><strong>${formatClock()}</strong><span class="dynamic-island"></span><span class="status-icons">▮▮▮ ⌁ ▰</span></div><div class="expand-hint">⌄ 탭하여 펼치기</div><section class="lock-clock"><span>${formatLockDate()}</span><strong>${formatClock()}</strong></section><section class="live-activity" aria-label="Somni 수면 Live Activity"><header><span class="live-app-icon"></span><b>SOMNI</b><em>Live</em></header><div class="live-main"><div class="live-avatar">${character(state.companion, "sleeping", "live-character")}</div><div><h1>수면 기록 중</h1><p>${elapsed.label}</p></div></div><div class="live-progress"><i style="width:${elapsed.progress}%"></i></div><div class="live-meta"><span><small>시작 시각</small><b>${elapsed.startedAt}</b></span><span><small>알람 설정</small><b>${formatMeridiem(state.wake)}</b></span></div></section><button class="return-to-somni" data-end-sleep>Somni로 돌아가 기상 체크</button><div class="home-indicator"></div></main>`;
+  return `<main class="sleep-screen lock-screen"><div class="lock-wallpaper"></div><div class="ios-status"><strong>${formatClock()}</strong><span class="dynamic-island"></span><span class="status-icons">▮▮▮ ⌁ ▰</span></div><div class="expand-hint">⌄ 탭하여 펼치기</div><section class="lock-clock"><span>${formatLockDate()}</span><strong>${formatClock()}</strong></section><section class="live-activity" aria-label="밤가이 수면 Live Activity"><header><span class="live-app-icon"></span><b>밤가이</b><em>Live</em></header><div class="live-main"><div class="live-avatar">${character(state.companion, "sleeping", "live-character")}</div><div><h1>수면 기록 중</h1><p>${elapsed.label}</p></div></div><div class="live-progress"><i style="width:${elapsed.progress}%"></i></div><div class="live-meta"><span><small>시작 시각</small><b>${elapsed.startedAt}</b></span><span><small>알람 설정</small><b>${formatMeridiem(state.wake)}</b></span></div></section><button class="return-to-somni" data-end-sleep>밤가이로 돌아가 기상 체크</button><div class="home-indicator"></div></main>`;
 }
 
 function render() {
-  if (!state.authResolved) app.innerHTML = `<main class="auth-screen auth-loading"><span class="auth-logo">S</span><p>내 리듬을 불러오는 중…</p></main>`;
+  if (!state.authResolved) app.innerHTML = `<main class="auth-screen auth-loading"><span class="auth-logo">밤</span><p>내 리듬을 불러오는 중…</p></main>`;
   else if (!state.authenticated) app.innerHTML = authScreen();
   else if (!state.onboarding) onboarding();
   else app.innerHTML = state.screen === "sleep" ? sleep() : ({ home, routine, report, settings, checkin, "daytime-checkin": daytimeCheckin }[state.screen] || home)();
@@ -501,7 +504,7 @@ app.addEventListener("click", async (event) => {
       }
       if (provider === "apple" && !current.connected) {
         if (!requestAppleDeviceSync("connect")) {
-          showToast("Apple Calendar는 Somni iPhone 앱에서 연결할 수 있어요.");
+          showToast("Apple Calendar는 밤가이 iPhone 앱에서 연결할 수 있어요.");
         } else {
           showToast("iPhone의 캘린더 접근 권한을 확인해 주세요.");
         }
@@ -600,7 +603,7 @@ globalThis.somniAppleCalendarPermissionChanged = (granted) => {
     state.calendarConnections.apple = { ...state.calendarConnections.apple, connected: false };
     persist();
     render();
-    showToast("설정 앱에서 Somni의 캘린더 접근을 허용해 주세요.");
+    showToast("설정 앱에서 밤가이의 캘린더 접근을 허용해 주세요.");
   }
 };
 

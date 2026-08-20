@@ -65,14 +65,17 @@ def recommendation(profile, target_date, analysis=None):
     if analysis["reasons"]:
         reasons.append(analysis["reasons"][0]["message"])
     override = PlanOverride.objects.filter(profile=profile, target_date=target_date).first()
-    offset = max(-120, min(120, override.offset_minutes if override else 0))
+    user_offset = max(-120, min(120, override.offset_minutes if override else 0))
+    model_offset = int(analysis.get("recommendedBedtimeOffsetMinutes") or 0)
+    offset = max(-120, min(120, user_offset + model_offset))
     shift = lambda value: time_string(_time(value + offset))
     return {
         "targetDate": target_date.isoformat(), "wakeTime": time_string(_time(wake_minutes)),
         "bedtimeWindowStart": shift(start), "bedtimeWindowEnd": shift(end), "bedtimeCenter": shift(bedtime),
         "routineStart": shift(start - profile.routine_minutes), "sleepMinutes": max(0, sleep_minutes - offset),
         "baseSleepMinutes": base_sleep, "feedbackAdjustmentMinutes": 0,
-        "userOffsetMinutes": offset, "saved": bool(override and override.saved), "reasons": reasons,
+        "userOffsetMinutes": user_offset, "modelBedtimeOffsetMinutes": model_offset,
+        "totalBedtimeOffsetMinutes": offset, "saved": bool(override and override.saved), "reasons": reasons,
         "primaryScheduleId": strongest[1].id if strongest else None,
         "alerts": [{"type": "routine", "label": "취침 준비", "time": shift(start - profile.routine_minutes)}, {"type": "lights-out", "label": "불 끄기", "time": shift(start)}, {"type": "wake", "label": "기상", "time": time_string(_time(wake_minutes))}],
     }

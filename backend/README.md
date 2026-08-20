@@ -35,7 +35,7 @@ npm run test:all
 | `GET`, `POST` | `/api/v1/sleep-sessions/` | 수면 시작/Live Activity 상태 |
 | `PATCH` | `/api/v1/sleep-sessions/{id}/` | 알람·기상 체크 상태 전환 |
 | `PUT` | `/api/v1/calendars/apple/`, `/google/` | 캘린더 연결 상태 |
-| `GET` | `/auth/calendars/google/connect/` | 로그인된 Somni 계정에 Google Calendar OAuth 연결 |
+| `GET` | `/auth/calendars/google/connect/` | 로그인된 밤가이 계정에 Google Calendar OAuth 연결 |
 | `POST` | `/api/v1/calendars/sync/` | 연결된 Google 캘린더 동기화 및 Apple 기기 동기화 필요 여부 확인 |
 | `POST` | `/api/v1/calendars/google/sync/` | Google Calendar API에서 선택 캘린더 일정 동기화 |
 | `PUT` | `/api/v1/calendars/apple/events/` | iOS EventKit이 전달한 Apple Calendar 일정 반영 |

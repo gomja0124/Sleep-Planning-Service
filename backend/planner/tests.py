@@ -8,6 +8,7 @@ from django.http import HttpResponseRedirect
 from django.test import TestCase, override_settings
 
 from .models import Profile, Schedule
+from .services import recommendation
 from .sleep_analysis import analyze_sleep_history, calculate_bedtime_range_minutes
 
 
@@ -296,6 +297,54 @@ class SleepAnalysisParityTests(TestCase):
         self.assertEqual(fine["suggestedAdjustmentMinutes"], 15)
         self.assertEqual(capped["suggestedAdjustmentMinutes"], 0)
         self.assertEqual(capped["recommendedTargetSleepMinutes"], 540)
+
+    def test_final_model_uses_estimated_sleep_for_target_decisions(self):
+        feedback = [self.entry(
+            f"2026-08-{day}", "23:00", "07:00", 2, 4,
+            sleepOnsetDelayMinutes=75,
+        ) for day in range(10, 13)]
+        result = analyze_sleep_history(self.profile, feedback)
+
+        self.assertEqual(result["averageSleepOpportunityMinutes"], 480)
+        self.assertEqual(result["averageEstimatedSleepMinutes"], 405)
+        self.assertEqual(result["averageDecisionSleepMinutes"], 405)
+        self.assertEqual(result["adjustmentStrategy"], "REACH_CURRENT_TARGET")
+
+    def test_final_model_preserves_targets_above_exploration_cap(self):
+        feedback = [self.entry(f"2026-08-{day}", "22:00", "08:00", 4, 2) for day in range(8, 13)]
+        result = analyze_sleep_history({"targetSleepMinutes": 600}, feedback)
+
+        self.assertEqual(result["recommendedTargetSleepMinutes"], 600)
+
+    def test_final_model_corrects_repeated_execution_and_onset_delay(self):
+        late = [self.entry(
+            f"2026-08-{day}", "00:00", "07:30",
+            recommendationSnapshot={"bedtimeWindowStart": "23:00", "bedtimeWindowEnd": "23:30"},
+        ) for day in range(10, 13)]
+        onset = [self.entry(
+            f"2026-08-{day}", "23:15", "07:30",
+            sleepOnsetDelayMinutes=45,
+            recommendationSnapshot={"bedtimeWindowStart": "23:00", "bedtimeWindowEnd": "23:30"},
+        ) for day in range(10, 13)]
+
+        late_result = analyze_sleep_history(self.profile, late)
+        onset_result = analyze_sleep_history(self.profile, onset)
+        self.assertTrue(late_result["repeatedLateExecution"])
+        self.assertEqual(late_result["recommendedBedtimeOffsetMinutes"], 30)
+        self.assertTrue(onset_result["repeatedSleepOnsetDifficulty"])
+        self.assertEqual(onset_result["recommendedBedtimeOffsetMinutes"], -30)
+
+    def test_final_model_bedtime_offset_is_applied_to_server_plan(self):
+        profile = Profile.objects.create(external_id="final-model-plan")
+        profile.refresh_from_db()
+        result = recommendation(profile, date(2026, 8, 21), {
+            "recommendedBedtimeOffsetMinutes": -30,
+            "reasons": [],
+        })
+
+        self.assertEqual(result["modelBedtimeOffsetMinutes"], -30)
+        self.assertEqual(result["totalBedtimeOffsetMinutes"], -30)
+        self.assertEqual(result["bedtimeCenter"], "23:05")
 
 
 @override_settings(ALLOW_DEMO_USER=False)

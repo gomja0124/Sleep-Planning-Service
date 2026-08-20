@@ -11,6 +11,9 @@ MODERATE_NAP_THRESHOLD_MINUTES = 30
 COARSE_TARGET_THRESHOLD = 420
 FINE_TARGET_THRESHOLD = 480
 MAX_EXPLORATION_TARGET = 540
+LATE_EXECUTION_THRESHOLD_MINUTES = 15
+REPEATED_EXECUTION_COUNT = 3
+ONSET_DIFFICULTY_THRESHOLD_MINUTES = 30
 PRIMARY_STATE_PRIORITY = [
     "INSUFFICIENT_SLEEP",
     "LOW_CONDITION_DESPITE_DURATION",
@@ -68,6 +71,23 @@ def _entry_value(entry, snake, camel=None, default=None):
     return getattr(entry, snake, default)
 
 
+def _execution_offset(actual_time, snapshot):
+    if not isinstance(snapshot, dict):
+        return None
+    actual = _clock(actual_time)
+    start = _clock(snapshot.get("bedtimeWindowStart"))
+    end = _clock(snapshot.get("bedtimeWindowEnd"))
+    if actual is None or start is None or end is None:
+        return None
+    window_length = (end - start + MINUTES_IN_DAY) % MINUTES_IN_DAY
+    actual_from_start = (actual - start + MINUTES_IN_DAY) % MINUTES_IN_DAY
+    if actual_from_start <= window_length:
+        return 0
+    if actual_from_start - window_length <= MINUTES_IN_DAY / 2:
+        return actual_from_start - window_length
+    return actual_from_start - MINUTES_IN_DAY
+
+
 def _normalize(entry, index, target):
     actual_sleep = _time_string(_entry_value(entry, "actual_sleep", "actualSleep"))
     actual_wake = _time_string(_entry_value(entry, "actual_wake", "actualWake"))
@@ -83,6 +103,8 @@ def _normalize(entry, index, target):
     nap_duration = _number(_entry_value(entry, "nap_duration_minutes", "napDurationMinutes"), positive=True)
     nap_reason = str(_entry_value(entry, "nap_reason", "napReason", "") or "").strip()
     failure_reason = str(_entry_value(entry, "failure_reason", "failureReason", "") or "").strip()
+    snapshot = _entry_value(entry, "recommendation_snapshot", "recommendationSnapshot")
+    snapshot = dict(snapshot) if isinstance(snapshot, dict) else None
     raw_deficit = target - estimated
     return {
         "index": index,
@@ -92,6 +114,8 @@ def _normalize(entry, index, target):
         "sleepOpportunityMinutes": opportunity,
         "sleepOnsetDelayMinutes": onset,
         "estimatedSleepMinutes": estimated,
+        "executionOffsetMinutes": _execution_offset(actual_sleep, snapshot),
+        "recommendationSnapshot": snapshot,
         "rawSleepDeficitMinutes": raw_deficit,
         "sleepDeficitMinutes": max(0, raw_deficit),
         "freshness": freshness,
@@ -165,6 +189,19 @@ def analyze_sleep_history(profile, feedback=None, adaptation_state=None):
     insufficient = sum(item["sleepDeficitMinutes"] >= 30 and _condition_signal(item) for item in rules)
     low_condition = sum(item["estimatedSleepMinutes"] >= target - 15 and _condition_signal(item) for item in rules)
     needs_more = sum(_condition_signal(item) for item in rules)
+    execution_offsets = [item["executionOffsetMinutes"] for item in rules]
+    late_offsets = [value for value in execution_offsets if value is not None and value >= LATE_EXECUTION_THRESHOLD_MINUTES]
+    early_offsets = [value for value in execution_offsets if value is not None and value <= -LATE_EXECUTION_THRESHOLD_MINUTES]
+    avg_late = round(mean(late_offsets), 1) if late_offsets else None
+    avg_early = round(mean(abs(value) for value in early_offsets), 1) if early_offsets else None
+    onset_delays = [item["sleepOnsetDelayMinutes"] for item in rules if item["sleepOnsetDelayMinutes"] is not None and item["sleepOnsetDelayMinutes"] >= ONSET_DIFFICULTY_THRESHOLD_MINUTES]
+    avg_onset = _average(rules, "sleepOnsetDelayMinutes")
+    repeated_late = len(late_offsets) >= REPEATED_EXECUTION_COUNT
+    repeated_early = len(early_offsets) >= REPEATED_EXECUTION_COUNT
+    repeated_onset = len(onset_delays) >= REPEATED_EXECUTION_COUNT
+    execution_correction = min(30, max(15, round((avg_late or 15) / 15) * 15)) if repeated_late else (-min(30, max(15, round((avg_early or 15) / 15) * 15)) if repeated_early else 0)
+    onset_correction = -min(30, max(15, round((avg_onset or 30) / 30) * 15)) if repeated_onset else 0
+    bedtime_offset = max(-30, min(30, execution_correction + onset_correction))
 
     matched = []
     if len(records) < 3:
@@ -234,7 +271,7 @@ def analyze_sleep_history(profile, feedback=None, adaptation_state=None):
         "recordCount": len(records),
         "invalidRecordCount": len(normalized) - len(valid),
         "currentTargetSleepMinutes": target,
-        "recommendedTargetSleepMinutes": min(MAX_EXPLORATION_TARGET, max(target, target + adjustment)),
+        "recommendedTargetSleepMinutes": target if target >= MAX_EXPLORATION_TARGET else min(MAX_EXPLORATION_TARGET, max(target, target + adjustment)),
         "suggestedAdjustmentMinutes": adjustment,
         "adjustmentPhase": phase,
         "adjustmentStrategy": strategy,
@@ -243,8 +280,16 @@ def analyze_sleep_history(profile, feedback=None, adaptation_state=None):
         "recommendedAction": action,
         "averageSleepOpportunityMinutes": avg_opportunity,
         "averageEstimatedSleepMinutes": avg_estimated,
+        "averageDecisionSleepMinutes": avg_last5,
         "medianSleepOpportunityMinutes": round(median([item["sleepOpportunityMinutes"] for item in records]), 1) if records else None,
         "averageSleepDeficitMinutes": avg_deficit,
+        "averageLateExecutionMinutes": avg_late,
+        "averageEarlyExecutionMinutes": avg_early,
+        "averageSleepOnsetDelayMinutes": avg_onset,
+        "repeatedLateExecution": repeated_late,
+        "repeatedEarlyExecution": repeated_early,
+        "repeatedSleepOnsetDifficulty": repeated_onset,
+        "recommendedBedtimeOffsetMinutes": bedtime_offset,
         "averageFreshness": avg_freshness,
         "averageSleepiness": avg_sleepiness,
         "bedtimeRangeMinutes": bedtime_range,
@@ -259,11 +304,14 @@ def analyze_sleep_history(profile, feedback=None, adaptation_state=None):
             "lowConditionDespiteDurationCountLast5": low_condition,
             "needsMoreSleepCountLast5": needs_more,
             "napCountLast5": sum(item["napDurationMinutes"] is not None and item["napDurationMinutes"] >= MODERATE_NAP_THRESHOLD_MINUTES for item in rules),
+            "lateExecutionCountLast5": len(late_offsets),
+            "earlyExecutionCountLast5": len(early_offsets),
+            "sleepOnsetDifficultyCountLast5": len(onset_delays),
         },
         "confidence": confidence,
         "reasons": reasons,
         "records": [{
-            **{key: item[key] for key in ("date", "actualSleep", "actualWake", "sleepOpportunityMinutes", "sleepOnsetDelayMinutes", "estimatedSleepMinutes", "rawSleepDeficitMinutes", "sleepDeficitMinutes")},
+            **{key: item[key] for key in ("date", "actualSleep", "actualWake", "sleepOpportunityMinutes", "sleepOnsetDelayMinutes", "estimatedSleepMinutes", "executionOffsetMinutes", "recommendationSnapshot", "rawSleepDeficitMinutes", "sleepDeficitMinutes")},
             "subjective": {key: item[key] for key in ("freshness", "sleepiness", "failureReason", "napDurationMinutes", "napReason")},
         } for item in records],
     }

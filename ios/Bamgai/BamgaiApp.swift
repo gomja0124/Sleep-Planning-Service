@@ -1,13 +1,13 @@
 import SwiftUI
 
 @main
-struct SomniApp: App {
+struct BamgaiApp: App {
     @Environment(\.scenePhase) private var scenePhase
-    @StateObject private var model = SomniWebViewModel()
+    @StateObject private var model = BamgaiWebViewModel()
 
     var body: some Scene {
         WindowGroup {
-            SomniWebView(model: model)
+            BamgaiWebView(model: model)
                 .ignoresSafeArea()
         }
         .onChange(of: scenePhase) { phase in
