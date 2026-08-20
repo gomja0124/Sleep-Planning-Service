@@ -7,3 +7,10 @@ __pycache__/
 # 배포 빌드가 만드는 프런트 사본
 backend/frontend_dist/
 backend/staticfiles/
+
+# 해커톤 제출 자료와 로컬 시연 녹화본
+# 심사용 계정 정보 및 중복 바이너리를 Public 저장소에 올리지 않는다.
+final_submission/
+final_submission 2/
+recordings/
+밤가이_최종제출_*.zip

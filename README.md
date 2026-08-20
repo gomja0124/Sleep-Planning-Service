@@ -4,6 +4,14 @@
 
 현재 `main`은 밤가이 모바일 프론트엔드와 Django API, 계정·캘린더·적응형 수면 분석을 통합한 상태입니다.
 
+## 제출·운영 링크
+
+- 운영 서비스: [https://bamgai.onrender.com](https://bamgai.onrender.com)
+- Public 저장소: [https://github.com/gomja0124/Sleep-Planning-Service](https://github.com/gomja0124/Sleep-Planning-Service)
+- 평가·배포 브랜치: `main`
+- FE·BE·AI 추천 모델을 하나의 저장소에서 관리하므로 제출 폼의 세 GitHub 항목에 동일한 저장소 URL을 사용합니다.
+- Render Blueprint는 [`render.yaml`](./render.yaml)의 `branch: main` 설정으로 위 브랜치와 연동됩니다.
+
 - 첫 실행 `캐릭터 선택 → 내 리듬 → 메인` 온보딩과 선택값 유지
 - 일어나야 할 시간·원하는 수면 길이 초기 설정
 - 12시간제·24시간제 전역 시간 표시 설정
@@ -15,7 +23,8 @@
 - 수면 Live Activity 목업 → 기상 알람 → 알람 끄기 → 기상 체크
 - 아침 컨디션·입면 지연·낮 졸림·낮잠 기록을 통한 적응형 수면 목표 탐색
 - 추천 대비 실제 취침 편차와 반복 입면 지연을 반영한 15~30분 취침 시각 보정
-- 커뮤니티 게시판, 친구 모집, 공동 연속 일수, 취침팟·누적 수면 도전, 시즌 보상 화면
+- 게시글·댓글·좋아요 기반 커뮤니티 게시판
+- 친구 모집, 공동 연속 일수, 취침팟·누적 수면 도전, 시즌 보상은 후속 확장 기능
 - 초기 2~3주/안정화 이후 업데이트 정책 안내
 
 ## 실행
