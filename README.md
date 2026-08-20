@@ -75,6 +75,34 @@ SwiftUI/WKWebView 셸과 변경 감지 브리지는 [`ios/README.md`](./ios/READ
 npm run test:all
 ```
 
+## 배포
+
+프런트와 백엔드를 따로 올립니다. **GitHub Pages만으로는 동작하지 않습니다.**
+Pages는 정적 파일만 서빙하는데 로그인·게시판·수면 계획이 전부 `/api/v1/` 호출이라,
+백엔드가 없으면 화면만 뜨고 모든 기능이 실패합니다.
+
+**1. 백엔드** — Render·Railway처럼 파이썬을 돌릴 수 있는 곳에 올립니다.
+저장소에 `Procfile`이 있어서 릴리스 단계에서 마이그레이션과 정적 파일 수집이 돕니다.
+환경변수는 아래 네 개가 필수입니다.
+
+| 변수 | 값 | 없으면 |
+|---|---|---|
+| `DJANGO_DEBUG` | `false` | 예외 화면에 소스와 설정이 노출됩니다 |
+| `DJANGO_SECRET_KEY` | 길고 무작위한 값 | **서버가 아예 뜨지 않습니다** |
+| `DJANGO_ALLOWED_HOSTS` | 백엔드 도메인 | 모든 요청이 400 |
+| `FRONTEND_ORIGIN` | Pages 주소 | CORS와 쿠키가 막힙니다 |
+
+`DATABASE_URL`을 넣지 않으면 SQLite 파일을 쓰는데, 대부분의 PaaS는 재배포마다
+디스크를 초기화하므로 글이 사라집니다. Postgres를 붙이는 것을 권합니다.
+
+**2. 프런트** — `.github/workflows/deploy-pages.yml`이 `main` 푸시마다 Pages로
+배포합니다. 저장소 Variables에 `SOMNI_API_BASE`(1번에서 배포한 백엔드 주소)를
+등록해야 합니다. 값이 비어 있으면 워크플로가 일부러 실패합니다.
+잘못된 주소로 조용히 배포되는 것보다 낫기 때문입니다.
+
+두 주소가 서로를 가리켜야 합니다. 백엔드의 `FRONTEND_ORIGIN`이 Pages 주소,
+Pages의 `SOMNI_API_BASE`가 백엔드 주소입니다.
+
 ## 구조
 
 ```text

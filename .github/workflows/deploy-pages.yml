@@ -1,0 +1,60 @@
+# 정적 프런트를 GitHub Pages로 배포한다.
+#
+# 백엔드(Django)는 여기서 배포되지 않는다. Render 같은 파이썬 호스팅에 따로 올리고,
+# 그 주소를 저장소 Variables의 SOMNI_API_BASE에 넣어야 로그인과 게시판이 동작한다.
+# (Settings → Secrets and variables → Actions → Variables)
+#
+# 백엔드 쪽에는 FRONTEND_ORIGIN을 이 Pages 주소로 설정해야 CORS와 쿠키가 통과한다.
+
+name: Deploy frontend to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 백엔드 주소 주입
+        env:
+          SOMNI_API_BASE: ${{ vars.SOMNI_API_BASE }}
+        run: |
+          if [ -z "$SOMNI_API_BASE" ]; then
+            echo "::error::저장소 변수 SOMNI_API_BASE가 비어 있습니다. 배포된 백엔드 주소를 넣어 주세요."
+            exit 1
+          fi
+          printf 'window.SOMNI_API_BASE = "%s";\n' "$SOMNI_API_BASE" > config.js
+          cat config.js
+
+      - name: 정적 파일만 추리기
+        run: |
+          mkdir -p _site
+          cp index.html planner.html config.js *.css _site/
+          cp -r src assets _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

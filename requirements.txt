@@ -1,3 +1,8 @@
 Django>=5.1,<6.0
 django-allauth[socialaccount]>=65.0,<66.0
 django-cors-headers>=4.7,<5.0
+# 배포용
+gunicorn>=23.0,<24.0
+whitenoise>=6.8,<7.0
+dj-database-url>=2.3,<3.0
+psycopg[binary]>=3.2,<4.0
